@@ -11,6 +11,15 @@ run setup.sh script:
 
 ## Decumentation
 
+### update-chain
+
+- This script is for generating `chain-batch` script, which is a `chain` script for batch queueing system. It basically replaces `spawn` and `despawn` with `spawn-batch` and `despawn-batch`.
+- Usage
+
+  Generate the chain-batch with:
+ 
+  `./update-chain`
+
 ### spawn-batch
 
 - This script can be used to submit multiple jobs to a cluster using a batch queueing system. This script is for creating a job script, submitting the job script, monitoring the job, and resubimtting/killing the job.
@@ -29,14 +38,3 @@ run setup.sh script:
 ### farm-batch
 
 - This script is exactly same as `spawn-batch` script. This script is merely a counterpart to the `farm` script that is included in the EDDP package.
-
-### gen-chain-batch
-
-- This script is for generating `chain-batch` script, which is a `chain` script for batch queueing system. It basically replaces `spawn` and `despawn` with `spawn-batch` and `despawn-batch`.
-- Usage
-
-  Choose the type of scheduler (sge or slurm) and options that are suitable for your cluster/compute node in the script.
-
-  Generate the chain-batch-cluster with:
- 
-  `./gen-chain-batch`
