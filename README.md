@@ -3,7 +3,7 @@
 ## Installation
 install the package with:
 
-`git clone git@github.com:sehunjoo/ddp-scripts.git`
+`git clone git@github.com:sehunjoo/ddp-batch.git`
 
 run setup.sh script:
 
