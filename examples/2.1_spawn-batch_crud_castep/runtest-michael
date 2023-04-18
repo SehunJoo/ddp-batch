@@ -1,0 +1,17 @@
+#!/bin/bash
+
+./clean
+
+seed='Li'
+
+tar -xvzf hopper.tar.gz &> /dev/null
+
+cp michael.schedopt.example test.schedopt
+
+# test 1
+#nohup spawn-batch -despawn -command crud.pl -mpinp 4 &
+
+# test 2
+nohup spawn-batch -bakres mv -despawn -command crud.pl -mpinp 4 &
+
+exit 0

@@ -1,0 +1,8 @@
+#!/bin/bash
+
+ls -I "clean" -I "runtest-*" \
+   -I "Li.cell" -I "Li.param" -I "hopper.tar.gz"\
+   -I "*.schedopt.example" \
+    | xargs rm -rf
+
+rm -f .spawnpids* .fail.spawnpids*

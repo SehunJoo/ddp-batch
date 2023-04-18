@@ -1,0 +1,15 @@
+#!/bin/bash
+
+./clean
+
+seed='Li'
+
+cp archer2.schedopt.example test.schedopt
+
+# test 1
+#nohup spawn-batch -despawn -command airss.pl -mpinp 4 -step 0 -seed $seed -max 600 -build &
+
+# test 2
+nohup spawn-batch -bakres mv -despawn -command airss.pl -mpinp 4 -step 0 -seed $seed -max 600 -build &
+
+exit 0

@@ -1,0 +1,10 @@
+#!/bin/bash
+
+ls -I "clean" -I "runtest-*" \
+   -I "Li.*" \
+   -I "data.res" \
+   -I "testing" -I "training" -I "validation" \
+   -I "*.schedopt.example" \
+    | xargs rm -rf
+
+rm -f .spawnpids*
