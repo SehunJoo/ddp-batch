@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# check before proceeding
+
+echo "Uninstalling repore_relax ..."
+
+echo && ls -l --color  $AIRSS
+
+if [[ -f $AIRSS/repose_relax.orig ]]; then
+    echo "uninstall repose_relax"
+    mv $AIRSS/repose_relax.orig $AIRSS/repose_relax
+else
+    echo "skip"
+fi
+
+echo && ls -l --color  $AIRSS
+
+echo "Uninstalling franks ..."
+
+echo && ls -l --color  $DDP
+
+if [[ -f $DDP/franks.orig ]]; then
+    echo "uninstall franks"
+    mv $DDP/franks.orig $DDP/franks
+else
+    echo "skip"
+fi
+
+
+echo && ls -l --color  $DDP
+
+exit 0

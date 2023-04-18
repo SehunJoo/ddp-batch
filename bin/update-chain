@@ -1,0 +1,208 @@
+#!/bin/bash
+
+set -e
+
+function gen_chainbatch {
+
+    chain='chain'
+    [[ -z $chainbatch ]] && chainbatch="chain-batch"
+
+    echo "generate $chainbatch ..." 
+    
+    # usage
+    sed -n '1,/^# set defaults/p' $chain | head -n -1 \
+    > $chain.temp
+    
+    # defaults & get options
+    sed -n '/^# set defaults/,/^# checks before proceeding/p' $chain | head -n -1 \
+    >> $chain.temp
+    
+    # check before proceeding
+    sed -n "/^# checks before proceeding/,/^## generate data through full randomisation/p" $chain | head -n -1 \
+        | sed    -e 's/despawn/.\/despawn-batch/ ' \
+                 -e 's/defarm/.\/defarm-batch/ ' \
+                 -e 's/STOP/STOP jobscript_*.sh DONE_*/ ' \
+                 -e 's/exit 0/ rm -fr  despawn-batch defarm-batch; exit 0/ ' \
+        >> $chain.temp
+    
+    ## generate data through full randomisation, and no relaxation
+    sed -n '/^## generate data through full randomisation/,/^}/p' $chain \
+        | sed    -e "/airss.pl/      s/spawn airss.pl/spawn-batch ${opts} -command airss.pl -max \$full/ " \
+                 -e '/airss.pl/      s/$seed/$seed \&/ ' \
+                 -e '/despawn/       s/despawn/.\/despawn-batch/ ' \
+        >> $chain.temp
+    echo >> $chain.temp
+    
+    ## generate data by relaxation of marker structures using repose, and computing energy using castep
+    sed -n '/^## generate data by relaxation of marker structures using repose/,/^}/p' $chain \
+        | sed    -e "/crud.pl/       s/spawn-slow/spawn-batch ${opts} -command/" \
+                 -e '/crud.pl/       s/$mpinp/$mpinp \&/' \
+                 -e '/despawn/       s/despawn/.\/despawn-batch/ ' \
+        >> $chain.temp
+    echo >> $chain.temp
+    
+    ## generate data by relaxation of random structures using repose, and computing energy using castep
+    sed -n '/^## generate data by relaxation of random structures using repose/,/^}/p' $chain \
+        | sed    -e "/airss.pl/      s/spawn airss.pl/spawn-batch ${opts} -command airss.pl -max \$minima/" \
+                 -e '/airss.pl/      s/$seed/$seed \&/ ' \
+                 -e '/despawn/       s/despawn/.\/despawn-batch/' \
+                 -e "/crud.pl/       s/spawn-slow/spawn-batch ${opts} -command/" \
+                 -e '/crud.pl/       s/$mpinp/$mpinp \&/' \
+        >> $chain.temp
+    echo >> $chain.temp
+    
+    ## construct ensemble potentials
+    sed -n '/^## construct ensemble potentials/,/^}/p' $chain \
+        | sed    -e '/let numjobs/   s/let/#let/ ' \
+                 -e '/let numpot/    s/let/#let/ ' \
+                 -e '/let maxpot/    s/let/#let/ ' \
+                 -e '/forge -mpinp/  s/-numpot $numpot/-numpot $minpot/ ' \
+                 -e "/forge -mpinp/  s/farm/farm-batch ${opts} -command/ " \
+                 -e '/forge -mpinp/  s/$seed\/$seed/$seed\/$seed \&/ ' \
+                 -e "/echo 'maximum/ s/echo/#echo/ " \
+                 -e '/let waitpot/   s/let/#let/ ' \
+                 -e "/echo 'waiting/ s/echo/#echo/ " \
+                 -e '/until/         s/waitpot/minpot/ ' \
+                 -e '/defarm/        s/defarm/.\/defarm-batch/ ' \
+                 -e '/counter=`grep/ s/counter/#counter/ ' \
+                 -e '/counter=`grep/ a \    counter=`ls $seed/*.ddp 2> /dev/null | wc -l`' \
+                 -e '/let gotpot/    i \    find . -name \"$seed/$seed*.ddp\" -empty -type f -delete' \
+                 -e '/let gotpot/    i \    grep -L powers $seed/$seed*.ddp | xargs rm -f' \
+                 -e '/let gotpot/    i \    ls $seed/$seed*.ddp | shuf | head -n -$minpot | xargs -r rm' \
+                 -e '/flock/         a \    dir=$(date +%y%m%d-%H%M%S)-flock' \
+                 -e '/flock/         a \    mkdir $dir' \
+                 -e '/flock/         a \    cp flock-* $dir' \
+                 -e '/flock/         a \    cp -R $seed{,.cell,.param,.eddp} data.res $dir' \
+                 -e '/flock/         a \    sleep 1' \
+        >> $chain.temp
+    echo >> $chain.temp
+
+    ## main
+    sed -n '/^##########/,$p' $chain \
+    >> $chain.temp
+
+    chmod 777 $chain.temp
+    mv $chain.temp $chainbatch
+
+    echo -e "done\n"
+}
+
+function gen_chainbatch_franks {
+
+    chainbatch="chain-batch"
+
+    echo "generate $chainbatch-genfeat ..." 
+
+    ## usage & defaults & get options & check before proceeding
+    sed -n '1,/^## generate data through full randomisation/p' $chainbatch | head -n -1 \
+    > $chainbatch.temp
+    
+    ## construct ensemble potentials
+    sed -n '/^## construct ensemble potentials/,/^}/p' $chainbatch \
+    | sed    -e '/launching forge/,/rm -f training validation testing/d' \
+    >> $chainbatch.temp
+    echo >> $chainbatch.temp
+    
+    ## main
+    sed -n '/^##########/,/rm -f/p' $chainbatch \
+    >> $chainbatch.temp
+    echo >> $chainbatch.temp
+    
+    sed -n '/^# generate an initial potential/,/^genpot/p' $chainbatch \
+    >> $chainbatch.temp
+    echo >> $chainbatch.temp
+    
+    sed -n '/^# report successful completion/,$p' $chainbatch \
+    >> $chainbatch.temp
+    
+    chmod 777 $chainbatch.temp
+    mv $chainbatch.temp $chainbatch-genfeat
+
+    echo -e "done\n"
+}
+
+function gen_chainbatch_forge {
+
+    chainbatch="chain-batch"
+
+    echo "generate $chainbatch-genpot ..." 
+
+    ## usage & defaults & get options & check before proceeding
+    sed -n '1,/^## generate data through full randomisation/p' $chainbatch | head -n -1 \
+    > $chainbatch.temp
+    
+    ## construct ensemble potentials
+    sed -n '/^## construct ensemble potentials/,/^}/p' $chainbatch \
+    | sed    -e '/cleaning up/,/franks/d' \
+    >> $chainbatch.temp
+    echo >> $chainbatch.temp
+    
+    ## main
+    sed -n '/^##########/,/rm -f/p' $chainbatch \
+    >> $chainbatch.temp
+    echo >> $chainbatch.temp
+    
+    sed -n '/^# generate an initial potential/,/^genpot/p' $chainbatch \
+    >> $chainbatch.temp
+    echo >> $chainbatch.temp
+    
+    sed -n '/^# report successful completion/,$p' $chainbatch \
+    >> $chainbatch.temp
+    
+    chmod 777 $chainbatch.temp
+    mv $chainbatch.temp $chainbatch-genpot
+
+    echo -e "done\n"
+}
+
+function gen_chainbatch_genpot {
+
+    chainbatch="chain-batch"
+
+    echo "generate $chainbatch-genpot ..." 
+
+    ## usage & defaults & get options & check before proceeding
+    sed -n '1,/^## generate data through full randomisation/p' $chainbatch | head -n -1 \
+    > $chainbatch.temp
+
+    ## genpot
+    sed -n '/^## construct ensemble potentials/,/^}/p' $chainbatch \
+    | sed    -e "/forge -mpinp/  s/-bakres cp// " \
+    >> $chainbatch.temp
+    echo >> $chainbatch.temp
+
+    ## main
+    sed -n '/^##########/,/rm -f/p' $chainbatch \
+    >> $chainbatch.temp
+    echo >> $chainbatch.temp
+    
+    sed -n '/^# generate an initial potential/,/^genpot/p' $chainbatch \
+    >> $chainbatch.temp
+    echo >> $chainbatch.temp
+    
+    sed -n '/^# report successful completion/,$p' $chainbatch \
+    >> $chainbatch.temp
+    
+    chmod 777 $chainbatch.temp
+    mv $chainbatch.temp $chainbatch-genpot
+
+    echo -e "done\n"
+}
+
+###############################################################33
+# main
+
+rm -f ./chain 
+cp $(which chain) ./ 
+
+gen_chainbatch
+
+chainbatch='chain-batch-bakres'
+opts="-bakres cp"
+gen_chainbatch
+
+#gen_chainbatch_franks
+#gen_chainbatch_forge
+gen_chainbatch_genpot
+
+rm -f ./chain

@@ -1,0 +1,9 @@
+#!/bin/bash
+
+set -e
+
+./despawn-batch
+
+wait
+
+exit 0

@@ -1,0 +1,34 @@
+#!/bin/bash
+
+# check before proceeding
+
+#echo "Installing repore_relax ..."
+#
+#echo && ls -l --color  $AIRSS
+#
+#if [[ -f $AIRSS/repose_relax.orig ]]; then
+#    echo "repose_relax is already installed, update repose_relax"
+#    cp ./repose_relax $AIRSS/repose_relax
+#else
+#    mv $AIRSS/repose_relax $AIRSS/repose_relax.orig
+#    cp ./repose_relax $AIRSS/repose_relax
+#fi
+#
+#echo && ls -l --color  $AIRSS
+
+echo "Installing franks ..."
+
+echo && ls -l --color  $DDP
+
+if [[ -f $DDP/franks.orig ]]; then
+    echo "repose_relax is already installed, update franks"
+    cp ./franks $DDP/franks
+else
+    mv $DDP/franks $DDP/franks.orig
+    cp ./franks $DDP/franks
+fi
+
+
+echo && ls -l --color  $DDP
+
+exit 0

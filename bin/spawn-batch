@@ -1,0 +1,699 @@
+#!/bin/bash
+
+set -e
+
+# check input parameters
+
+function usage {
+    echo 1>&2
+    echo 1>&2 "usage: $(basename $0)  [-despawn] [-bakres mode] [-command commandline]"
+    echo 1>&2
+    echo 1>&2 '    [OPTION]                     [DESCRIPTION]'
+    echo 1>&2
+    echo 1>&2 '    [-despawn]                   auto-run despawn-batch (default false)'
+    echo 1>&2 '    [-bakres   mode]             mode of backup result, mode = none|cp|mv (default none)'
+    echo 1>&2 '                                 copy/move input & output files to newly created backup directory '
+    echo 1>&2
+    echo 1>&2 '    [-command  commandline]      command line for running application'
+    echo 1>&2 '                                 this option should be located at the end of command line'
+    echo 1>&2
+    exit 1
+}
+
+if [ $# -lt 1 ]; then
+    usage
+fi
+
+
+# set defaults
+
+despawn='false'
+bakres='none'
+genjob='false'
+cmdline=''
+mpinp=1
+seed=''
+max=1000000    # default $opt_max  in airss.pl
+exe='castep'   # default $opt_exec in airss.pl
+numpot='256'   # default 
+
+
+while [ $# -ge 1 ] ; do
+    case $1 in
+        -despawn)
+            despawn='true'; shift 1
+            ;;
+        -genjob)
+            genjob='true'; shift 1
+            ;;
+        -bakres)
+            bakres=$2; shift 2
+            ;;
+        -command)
+            shift 1; cmdline=$*;
+            program=$(echo $1 | awk 'BEGIN {FS="/"} {print $NF}' | awk 'BEGIN { FS = "." }; {print $1}'); shift 1
+
+            while [ $# -ge 1 ]; do
+                case $1 in
+                    -mpinp)
+                        mpinp=$2; shift 2 # airss | crud
+                        ;;
+                    -repose)
+                        exe='repose'; shift 1 # airss | crud
+                        ;;
+                    -seed)
+                        seed=$2; shift 2 # airss
+                        ;;
+                    -max)
+                        max=$2; shift 2 # airss
+                        ;;
+                    -numpot)
+                        numpot=$2; shift 2 # forge
+                        ;;
+                    -s)
+                        seed=$(echo $2 | awk 'BEGIN {FS="/"} {print $NF}'); shift 2 # forge
+                        ;;
+                    *)
+                        shift 1
+                        ;;
+                esac
+            done
+            ;;
+        -h)
+            usage
+            ;;
+	*) 
+            echo "invalid option: $1"
+            echo
+            usage
+            ;;
+    esac
+done
+
+
+# get options for scheduler
+
+[[ $(ls *.schedopt | wc -l) -ne 1 ]] && echo "There should be one *.schedopt file" && exit 1
+optfile=$(ls *.schedopt)
+
+echo "get options for scheduler from schedopt file ..."
+
+schedopt=$(cat $optfile  | sed '/^%block default/,/^%endblock default/!d;//d')
+
+if [[ $program == "airss" ]]; then
+    schedopt=$(cat $optfile  | sed '/^%block airss/,/^%endblock airss/!d;//d')
+elif [[ $program == "crud" ]]; then
+    schedopt=$(cat $optfile  | sed '/^%block crud/,/^%endblock crud/!d;//d')
+elif [[ $program == "forge" ]]; then
+    schedopt=$(cat $optfile  | sed '/^%block forge/,/^%endblock forge/!d;//d')
+fi
+
+nonschedopt=$(echo "$schedopt" | sed '/^#/d')
+schedopt=$(echo "$schedopt" | sed -n '/^#/p')
+
+nopts_sge=$(echo "$schedopt" | sed -n '/^#\$/p' | wc -l)
+nopts_slurm=$(echo "$schedopt" | sed -n '/^#SBATCH/p' | wc -l)
+
+#echo "number of options(sge)   : $nopts_sge"
+#echo "number of options(slurm) : $nopts_slurm"
+
+if [[ $nopts_sge -gt 0 ]]
+then
+    sched='sge'
+    schedopt=$(echo "$schedopt" | sed -n '/^#\$/p')
+    sched_nnodes=$(echo "$schedopt" | sed -n '/ -t /p' | awk '{print $3}' | awk 'BEGIN {FS="-"} {print $2}')
+    sched_ncores_per_node=$(echo "$schedopt" | sed -n '/ -pe /p' | awk '{print $4}')
+
+elif [[ $nopts_slurm -gt 0 ]]
+then
+    sched='slurm'
+    schedopt=$(echo "$schedopt" | sed -n '/^#SBATCH/p')
+    sched_nnodes=$(echo "$schedopt" | sed -n '/--array/p' | awk 'BEGIN {FS="--array="} {print $2}' | awk 'BEGIN {FS="-"} {print $2}')
+    sched_ncores_per_node=$(echo "$schedopt" | sed -n '/--tasks-per-node/p' | awk 'BEGIN {FS="--tasks-per-node="} {print $2}')
+else
+    echo "sge | slurm is only available" && exit 1
+fi
+
+#echo "number of nodes          : $sched_nnodes"
+#echo "number of cores          : ${sched_ncores_per_node}/node"
+
+ncores_per_node=$(echo "$nonschedopt" | grep 'ncores_per_node' | awk 'BEGIN {FS="="} {print $2}' | awk '{print $1}')
+mem_per_core=$(echo "$nonschedopt" | grep 'mem_per_core' | awk 'BEGIN {FS="="} {print $2}' | awk '{print $1}')
+mem_per_job=$(( $mem_per_core * $mpinp ))
+[[ -z $ncores_per_node ]] && ncores_per_node=$sched_ncores_per_node
+njobs_per_node=$(echo "$ncores_per_node/$mpinp" | bc)              # maximum number of jobs per node
+njobs=$(echo "$njobs_per_node*$sched_nnodes" | bc)                 # total number of jobs to be run
+
+jobscript="jobscript_${program}.sh"
+
+
+# check before proceeding
+
+if ls .spawnpids* &>/dev/null; then
+    echo 'Spawn files detected - aborting ...'
+    exit 127
+fi
+
+if [[ $ncores_per_node -gt $sched_ncores_per_node ]]; then
+    echo "ncore_per_node should be equal or less than $sched_ncores_per_node"
+    exit 127
+fi
+
+if [ $mpinp -gt $ncores_per_node ]; then
+    echo "mpinp should be equal or less than $ncores_per_node"
+    exit 127
+fi
+
+if [[ -f STOP ]]; then
+    echo 'STOP file detected - aborting ...'
+    exit 127
+fi
+
+echo
+echo
+echo '    .dP"Y8 88""Yb    db    Yb        dP 88b 88          88""Yb    db    888888  dP""b8 88  88'
+echo '    `Ybo." 88__dP   dPYb    Yb  db  dP  88Yb88 ________ 88__dP   dPYb     88   dP   `" 88  88'
+echo '    o.`Y8b 88"""   dP__Yb    YbdPYbdP   88 Y88 """""""" 88""Yb  dP__Yb    88   Yb      888888'
+echo "    8bodP' 88     dP''''Yb    YP  YP    88  Y8          88oodP dP''''Yb   88    YboodP 88  88"
+echo 
+echo
+echo '    automated generation of jobscript & automated job submission'
+echo '    for batch queuing system'
+echo
+echo '    summary of parameters - '
+echo
+echo "      jobscript           : $jobscript"
+echo "      scheduler           : $sched"
+echo
+echo "      nodes(allocated)    : $sched_nnodes"
+echo "      cores(allocated)    : $sched_ncores_per_node/node"
+echo "      cores(used)         : $ncores_per_node/node"
+echo "      memory(used)        : ${mem_per_core}M/core"
+echo "      mpinp               : $mpinp"
+echo "      subjobs             : $njobs ($njobs_per_node/node)"
+echo
+echo "      command             : $cmdline"
+echo "      program             : $program"
+echo "      seed                : $seed"
+echo "      despawn             : $despawn"
+echo "      bakres              : $bakres"
+[[ $program == "airss" ]] && echo "      max                 : $max"
+[[ $program == "forge" ]] && echo "      numpot              : $numpot"
+
+
+## generate batch script to run an MPI paralleli array job under Sun Grid Engine (SGE) batch queuing system
+
+function genjob {
+    
+    echo -e '\n''generate jobscript ...'
+    
+    # job script - scheduler options
+
+    (
+        echo "#!/bin/bash -l"
+        echo
+        echo "${schedopt}"
+        echo
+    ) > $jobscript
+
+    # job script - environment variables & variables
+    # at runtime, archer2 jobs do not have access to the home directory, but we require the .bashrc
+    # copy it into the run directory
+    cp ~/.bashrc ./
+    (
+        echo '# --------------------------------------------------'
+        echo
+        echo 'source ./.bashrc'
+        echo 
+        echo '# set variables'
+        echo 
+        if [[ $sched == "sge" ]]
+        then
+            echo 'workdir="${SGE_O_WORKDIR}"'
+            echo 'jobid="${JOB_ID}"'
+            echo 'taskid="${SGE_TASK_ID}"'
+        elif [[ $sched == "slurm" ]]
+        then
+            echo 'workdir="${SLURM_SUBMIT_DIR}"'
+            echo 'jobid="${SLURM_ARRAY_JOB_ID}"'
+            echo 'taskid="${SLURM_ARRAY_TASK_ID}"'
+        fi
+        echo 'jids="${jobid}.${taskid}"'
+        echo 'prefix=".spawnpids"'
+        echo
+        echo "cmdline='${cmdline}'"
+        echo "program='${program}'"
+        echo "mpinp='${mpinp}'"
+        if [[ $exe == 'repose' ]] || [[ $program == 'forge' ]]
+        then
+            echo 'export OMP_NUM_THREADS=$mpinp'
+        else
+            echo "export OMP_NUM_THREADS=1"
+        fi
+        echo "seed='${seed}'"
+        echo
+        echo "t_submit='$(date +%Y-%m-%d\ %H:%M:%S)'"
+        echo 't_start="$(date +%Y-%m-%d\ %H:%M:%S)"'
+        echo 'tsec_start=$(date +%s)'
+        echo 
+    ) >> $jobscript
+
+    # job script - run application
+
+    (
+        echo '# launch program'
+        echo
+        echo "for i in {1..${njobs_per_node}}"
+        echo 'do'
+        
+        if [[ $program == 'airss' || $program == 'crud' ]]
+        then
+            if [[ $exe == 'castep' ]] && [[ $sched == 'sge'   ]]
+            then
+                echo "    ${cmdline}"'\'
+                echo "        -launch 'mpirun -np '"' \'
+                echo "        -exec 'castep.mpi' &"
+
+            elif [[ $exe == 'castep' ]] && [[ $sched == 'slurm' ]]
+            then
+                echo "    ${cmdline}"' \'
+                echo "        -launch 'srun --exact --nodes=1 --cpus-per-task=1 --mem=${mem_per_job}M  --tasks-per-node=${mpinp}  --ntasks='"' \'
+                echo "        -exec 'castep.mpi' &"
+
+            elif [[ $exe == 'repose' ]]
+            then
+                echo "    ${cmdline} &"
+            fi
+
+        elif [[ $program == 'forge' ]]
+        then
+            echo '    ${cmdline}.${jids}.${i}  < /dev/null \'
+            echo '                             > ${seed}/${seed}.${jids}.${i}.out \'
+            echo '                            2> ${seed}/${seed}.${jids}.${i}.err &'
+
+        else
+            echo "    ${cmdline} < /dev/null >& /dev/null &"
+        fi
+
+        echo ''
+        echo '    pid=$!'
+        echo '    pgid=`ps -o pgid= ${pid}`'
+        echo '    echo "--------------------${jids}.${i}"                  > ${prefix}.${jids}.${i}'
+        echo '    echo "program:            ${program}"                   >> ${prefix}.${jids}.${i}'
+        echo '    echo "command:            ${cmdline}"                   >> ${prefix}.${jids}.${i}'
+        echo '    echo "jobid:              ${jobid}"                     >> ${prefix}.${jids}.${i}'
+        echo '    echo "taskid:             ${taskid}"                    >> ${prefix}.${jids}.${i}'
+        echo '    echo "pid:                ${pid}"                       >> ${prefix}.${jids}.${i}'
+        echo '    echo "pgid:               ${pgid}"                      >> ${prefix}.${jids}.${i}'
+        echo '    echo "mpinp:              ${mpinp}"                     >> ${prefix}.${jids}.${i}'
+        echo '    echo "submit_time:        ${t_submit}"                  >> ${prefix}.${jids}.${i}'
+        echo '    echo "start_time:         ${t_start}"                   >> ${prefix}.${jids}.${i}'
+        echo 'done'
+        echo
+        echo 'sleep 5'
+        echo
+    ) >> $jobscript
+
+    # job script - monitor jobs
+    
+    if [[ $program == "airss" ]]
+    then
+        (
+            echo "# check the number of random structure generated (./*.res files)"
+            echo
+            echo 'counter=0'
+            echo "max='${max}'"
+            echo 
+            echo 'until [[ $counter -ge $max ]]'
+            echo 'do'
+            echo '    sleep 1'
+            echo 
+            echo '    counter=$(find . -maxdepth 1 -type f -name "$seed-*.res" 2> /dev/null | sed "/data.res/d" | xargs grep --no-filename TITL 2> /dev/null | wc -l)'
+            echo 
+            echo '    t_check=$(date +%Y-%m-%d\ %H:%M:%S)'
+            echo '    tsec_check=$(date +%s)'
+            echo '    tsec_run=$((${tsec_check} - ${tsec_start}))'
+            echo '    rt_h=$(( ${tsec_run}/3600 ))'
+            echo '    rt_m=$(( (${tsec_run}/60) - (${rt_h}*60) ))'
+            echo '    rt_s=$(( ${tsec_run} - (${tsec_run}/60)*60 ))'
+            echo 
+            echo "    for i in {1..${njobs_per_node}}"
+            echo '    do'
+            echo '        sed -i "/check_time/d"                                    ${prefix}.${jids}.${i}'
+            echo '        sed -i "/run_time/d"                                      ${prefix}.${jids}.${i}'
+            echo '        sed -i "/no. structures/d"                                ${prefix}.${jids}.${i}'
+            echo '        echo "check_time:         ${t_check}"                  >> ${prefix}.${jids}.${i}'
+            echo '        echo "run_time:           ${rt_h}:${rt_m}:${rt_s}"     >> ${prefix}.${jids}.${i}'
+            echo '        echo "no. structures:     ${counter}"                  >> ${prefix}.${jids}.${i}'
+            echo '    done'
+            echo 'done'
+            echo 
+            echo 'sleep 5'
+            echo
+        ) >> $jobscript
+    elif [[ $program == "crud" ]]
+    then
+        (
+            echo '# check the number of random structure left (./hobber/*.res files)'
+            echo
+            echo 'counter=1'
+            echo
+            echo 'until [[ ${counter} -eq 0 ]]'
+            echo 'do'
+            echo '    sleep 1'
+            echo 
+            echo '    counter=$(find . ./hopper -maxdepth 1 -type f -name "*.res" | sed "/data.res/d" | wc -l)'
+            echo
+            echo '    t_check=$(date +%Y-%m-%d\ %H:%M:%S)'
+            echo '    tsec_check=$(date +%s)'
+            echo '    tsec_run=$((${tsec_check} - ${tsec_start}))'
+            echo '    rt_h=$(( ${tsec_run}/3600 ))'
+            echo '    rt_m=$(( (${tsec_run}/60) - (${rt_h}*60) ))'
+            echo '    rt_s=$(( ${tsec_run} - (${tsec_run}/60)*60 ))'
+            echo 
+            echo "    for i in {1..${njobs_per_node}}"
+            echo '    do'
+            echo '        sed -i "/check_time/d"                                     ${prefix}.${jids}.${i}'
+            echo '        sed -i "/run_time/d"                                       ${prefix}.${jids}.${i}'
+            echo '        sed -i "/no. structures/d"                                 ${prefix}.${jids}.${i}'
+            echo '        echo "check_time:         ${t_check}"                   >> ${prefix}.${jids}.${i}'
+            echo '        echo "run_time:           ${rt_h}:${rt_m}:${rt_s}"      >> ${prefix}.${jids}.${i}'
+            echo '        echo "no. structures:     ${counter}"                   >> ${prefix}.${jids}.${i}'
+            echo '    done'
+            echo 'done'
+            echo 
+            echo 'sleep 5'
+            echo 
+        ) >> $jobscript
+    elif [[ $program == "forge" ]]
+    then
+        (
+            echo '# check the number of potential generated (./$seed/*.ddp files)'
+            echo
+            echo 'counter=0'
+            echo 'counterddp=0'
+            echo "numpot='${numpot}'"
+            echo
+            echo 'until [[ $counter -ge $numpot || $counterddp -ge $numpot ]]'
+            echo 'do'                
+            echo '    counter=$(grep "testing:   testing" ${seed}/*.out | wc -l)'
+            echo '    counterddp=$(ls ${seed}/*.ddp | wc -l)'
+            echo
+            echo '    t_check=$(date +%Y-%m-%d\ %H:%M:%S)'
+            echo '    tsec_check=$(date +%s)'
+            echo '    tsec_run=$((${tsec_check} - ${tsec_start}))'
+            echo '    rt_h=$(( ${tsec_run}/3600 ))'
+            echo '    rt_m=$(( (${tsec_run}/60) - (${rt_h}*60) ))'
+            echo '    rt_s=$(( ${tsec_run} - (${tsec_run}/60)*60 ))'
+            echo 
+            echo "    for i in {1..${njobs_per_node}}"
+            echo '    do'
+            echo '        sed -i "/check_time/d"                                     ${prefix}.${jids}.${i}'
+            echo '        sed -i "/run_time/d"                                       ${prefix}.${jids}.${i}'
+            echo '        sed -i "/no. potentials/d"                                 ${prefix}.${jids}.${i}' 
+            echo '        echo "check_time:         ${t_check}"                   >> ${prefix}.${jids}.${i}'   
+            echo '        echo "run_time:           ${rt_h}:${rt_m}:${rt_s}"      >> ${prefix}.${jids}.${i}'
+            echo '        echo "no. potentials:     ${counterddp}"                >> ${prefix}.${jids}.${i}'
+            echo '    done'
+            echo 'done'
+            echo
+        ) >> $jobscript
+    fi
+
+    echo 'touch DONE_${jobid}' >> $jobscript
+    echo 'exit 0' >> $jobscript
+
+    echo 'done'
+}
+
+
+## generate despwan file
+
+function gendespawn {
+
+    echo -e '\n''generate despawn-batch ...'
+
+    # delete/cancel job
+
+    (
+        echo '#!/bin/bash'
+        echo
+        echo '# stop spawn-batch & delete/cancel job'
+        echo
+        echo "program='${program}'"
+        echo "jobid=\$(cat .spawnpids.* | grep jobid: | head -n 1 | awk '{print \$2}')"
+        echo
+        echo 'touch DONE_${jobid}'
+        echo
+        [[ $sched == 'sge'   ]] && echo 'qdel ${jobid}'
+        [[ $sched == 'slurm' ]] && echo 'scancel ${jobid}'
+        echo
+        echo 'counter=1'
+        echo 'until [[ $counter -eq 0 ]]'
+        echo 'do'
+        echo '    sleep 1'
+        [[ $sched == 'sge'   ]] && echo '    counter=$(qstat -u $USER -g d | grep $jobid | wc -l)'
+        [[ $sched == 'slurm' ]] && echo '    counter=$(squeue --noheader --job=$jobid --array --user=$USER | wc -l)'
+        echo 'done'
+        echo
+        echo 'echo "job $jobid has been deleted/cancelled successfully"'
+        echo
+        echo 'rm -f ./.bashrc'
+        echo
+        echo
+    ) > despawn-batch
+
+    # update job information in .spawpids.* files
+
+    (
+        echo '# update job information in .spawnpids.* files'
+        echo
+        echo 't_end=$(date +%Y-%m-%d\ %H:%M:%S)'
+        echo
+        echo 'for spawnfile in .spawnpids.*'
+        echo 'do'
+        echo '    echo "end_time:           ${t_end}"                     >> $spawnfile'
+        echo 'done'
+        echo
+    ) >> despawn-batch
+
+    if [[ $program == 'airss' ]] || [[ $program == 'crud' ]]
+    then
+        (
+            echo "seed='${seed}'"
+            [[ $program == 'airss' ]] && echo 'counter=$(find . -maxdepth 1 -type f -name "$seed-*.res" 2> /dev/null | sed "/data.res/d" | xargs grep --no-filename TITL 2> /dev/null | wc -l)'
+            [[ $program == 'crud'  ]] && echo 'counter=$(find . ./hopper -maxdepth 1 -type f -name "*.res" | sed "/data.res/d" | wc -l)'
+            echo
+            echo 'for spawnfile in .spawnpids.*'
+            echo 'do'
+            echo '    sed -i "/no. structures/d"                                $spawnfile'
+            echo '    echo "no. structures:     ${counter}"                  >> $spawnfile'
+            echo 'done'
+            echo
+            echo
+        ) >> despawn-batch
+    elif [[ $program == 'forge' ]]
+    then
+        (
+            echo "seed='${seed}'"
+            echo 'counter=$(ls ${seed}/*.ddp | wc -l)'
+            echo
+            echo 'for spawnfile in .spawnpids.*'
+            echo 'do'
+            echo '    sed -i "/no. potentials/d"                                $spawnfile'
+            echo '    echo "no. potentials:     ${counter}"                  >> $spawnfile'
+            echo 'done'
+            echo
+            echo
+        ) >> despawn-batch
+    fi
+
+    echo 'mkdir -p jobinfo' >> despawn-batch
+    echo "mv -f ${jobscript}                 jobinfo 2>/dev/null" >> despawn-batch
+    echo 'mv -f .spawnpids* .fail.spawnpids* jobinfo 2>/dev/null' >> despawn-batch
+    echo 'mv -f $program.{e,o,pe,po}*        jobinfo 2>/dev/null' >> despawn-batch
+    echo 'mv -f slurm-*.out                  jobinfo 2>/dev/null' >> despawn-batch
+
+    # backup data - job-related files
+
+    if [[ $bakres != 'none' ]]
+    then
+        (
+            echo '# backup data - job-related files'
+            echo
+            echo 't_end_ymd=$(date +%y%m%d)'
+            echo 't_end_hms=$(date +%H%M%S)'
+            echo
+            echo 'backupdir=${t_end_ymd}-${t_end_hms}-${jobid}-${program}'
+            echo 'mkdir ${backupdir}'
+            echo
+            echo 'mv jobinfo ${backupdir}'
+            echo
+            echo
+        ) >> despawn-batch
+    fi
+
+    # backup data - input & output files
+
+    if [[ $program == "airss" && $bakres != "none" ]]
+    then
+        (
+            echo '# backup data -input & output files'
+            echo
+            echo 'rm -f $seed-*.{cell,param,res.temp,cell.temp} &'
+            echo 'find . -maxdepth 1 -type f -name "$seed-*.res" -empty -delete &'
+            echo 'find . -maxdepth 1 -type f -name "$seed-*.res" | xargs grep -s -L TITL | xargs rm -f &'
+            echo 'find . -maxdepth 1 -type f -name "$seed-*.res" | xargs grep -s -L END  | xargs rm -f &'
+            echo 'wait'
+            echo
+            echo 'find . -maxdepth 1 -type f -name "$seed-*.res" | shuf | head -n -'$max' | xargs -r rm'
+            echo
+            echo 'cp $seed.{cell,param}       ${backupdir} 2>/dev/null'
+            echo 'cp -r $seed{,.eddp}         ${backupdir} 2>/dev/null'
+            echo 'mv trash                    ${backupdir} 2>/dev/null'
+            [[ $bakres == 'mv' ]] && echo 'find . -maxdepth 1 -type f -name "$seed-*.*" -exec mv -t ${backupdir} {} \+'
+            [[ $bakres == 'cp' ]] && echo 'find . -maxdepth 1 -type f -name "$seed-*.*" -exec cp -t ${backupdir} {} \+'
+            echo
+        ) >> despawn-batch
+
+    elif [[ $program == "crud" && $bakres != "none" ]]
+    then
+        (
+            echo 'cp *.{cell,param}       ${backupdir} 2>/dev/null'
+            [[ $bakres == 'mv' ]] && echo 'mv    bad_castep good_castep hopper ${backupdir} 2>/dev/null'
+            [[ $bakres == 'cp' ]] && echo 'cp -R bad_castep good_castep hopper ${backupdir} 2>/dev/null'
+            echo
+        ) >> despawn-batch
+
+    elif [[ $program == "forge" && $bakres != "none" ]]
+    then
+        (
+            echo 'cp -R ${seed} data.res ${backupdir} 2>/dev/null'
+            echo
+        ) >> despawn-batch
+    fi
+
+    echo 'wait' >> despawn-batch
+    echo 'exit 0' >> despawn-batch
+
+    chmod 777 despawn-batch
+    echo 'done'
+}
+
+
+
+## submit jobscript
+
+function subjob {
+
+    echo -e '\n''submit jobscript ...'
+
+    [[ $sched == 'sge' ]] && jobid=$(qsub -terse ${jobscript} | awk 'BEGIN{FS="."}; {print $1}')
+    [[ $sched == 'slurm' ]] && jobid=$(sbatch --parsable ${jobscript})
+
+    [[ -z $jobid ]] && echo "    job submission failed" && touch ./STOP && exit 1
+
+    echo
+    echo "    program             : ${program}" 
+    echo "    command             : ${cmdline}" 
+    echo "    jobid               : ${jobid}"
+    echo "    no. jobs  (in total): ${njobs}"
+    echo "    no. jobs  (per node): ${njobs_per_node}"
+    echo "    no. cores (in total): $((${njobs} * ${mpinp}))"
+    echo "    no. cores (per node): $((${njobs_per_node} * ${mpinp}))"
+    echo "    no. cores (per job) : ${mpinp}"
+    echo
+
+    (   
+        echo "program:            $program"
+        echo "command:            $cmdline"
+        echo "jobid:              $jobid"
+    ) > .spawnpids.$jobid
+
+    echo 'done'
+}
+
+## monitor job
+
+function monjob {
+
+    echo -e '\n'"monitor the job $jobid ..."
+
+    # monitoring the submitted jobs
+
+    counter=1
+    success='false'
+
+    until [[ $counter -eq 0 ]] || [[ $success == 'true' ]]
+    do
+        sleep 1
+
+        [[ $sched == 'sge' ]] && counter=$(qstat -u $USER -g d | grep $jobid | wc -l)
+        [[ $sched == 'slurm' ]] && counter=$(squeue --noheader --job=$jobid --array --user=$USER | wc -l)
+        echo -e -n "\r    ${counter} jobs pending/running"
+
+        [[ -f './STOP' ]] && echo -e '\n    stopping spawn-batch ...' && ./despawn-batch && exit 0
+
+        [[ -f DONE_${jobid} ]] && echo -e '\n    job has been completed ...' && success='true'
+    done
+
+    # check if jobs are pending/running
+
+    if [[ $success == 'true' ]]
+    then
+        [[ $despawn == 'true' ]] && echo -e '\nrun despawn-batch ...' && ./despawn-batch
+
+    elif [[ $success == 'false' ]]
+    then
+        echo '    job is terminated by wall clock limit'
+        echo '    resubmit the job'
+
+        rename '.spawnpids' '.fail.spawnpids' .spawnpids.*
+
+        if [[ $program == 'airss' ]]
+        then
+            for f in $(ls ScH-*.cell)
+            do
+                seedairss=${f%%.cell}
+                [[ ! -f $seedairss.res ]] && ls $seedairss.* | xargs rm -f
+            done
+
+        elif [[ $program == 'crud' ]]
+        then
+            if [[ -d bad_castep ]]
+            then
+                rm -f bad_castep/*.{cell,param,castep}
+                find . ./bad_castep -maxdepth 1 -type f -name "*.res" | sed '/data.res/d' | xargs mv -t ./hopper
+            fi
+        fi
+    fi
+
+    echo 'done'
+}
+
+
+################################################################################
+
+# generate jobscript
+
+genjob && gendespawn
+
+# submit jobscript
+
+if [[ $genjob != 'true' ]]
+then
+    if [[ $program == 'airss' || $program == 'crud' || $program == 'forge' ]]
+    then    
+        until [[ $success == 'true' ]]
+        do
+            subjob
+            monjob
+        done
+    else
+        subjob
+    fi
+fi
+
+echo 'complete'
+wait
+exit 0

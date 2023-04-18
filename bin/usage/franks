@@ -1,0 +1,86 @@
+#!/bin/bash
+
+set -e
+
+if [ $# -ne 10 ]; then
+    echo ${0##*/}' <rmax> <num_body> <num_p> <p_min> <p_max> <train_num> <valid_num> <test_num> <delta_e> <press>'
+    echo ' note: if called as frankm, then the mean feature vector is computed'
+  exit 1
+fi
+
+if [ ${0##*/} == 'frankm' ]; then
+    mean='-m'
+else
+    mean=''
+fi
+
+rmax=$1
+numb=$2
+nump=$3
+pmin=$4
+pmax=$5
+ntrain=$6
+nvalid=$7
+ntest=$8
+deltae=$9
+press=${10}
+
+function cutlist {
+
+    let end=$2+1
+    sed -n "$1,$2p;$endq" list.franks.$3
+
+}
+
+echo 'shuffling data ... '
+
+summary=$(ca -s 2>/dev/null)
+formulas=$(echo "$summary" | awk {'print $6'})
+
+for formula in $formulas
+do
+    ntot=$(echo "$summary" | sed -n "/ $formula /p" | awk {'print $9'})
+
+    let ntrain=$ntot*8/10
+    let nvalid=($ntot-$ntrain)/2
+    let ntest=$ntot-$ntrain-$nvalid
+
+    echo "$formula, $ntot, $ntrain:$nvalid:$ntest"
+
+    ca -f $formula -p $press -de $deltae -l -r | shuf | awk '{print $1}' > list.franks.$formula
+
+    let n1=1
+    let n2=$ntrain
+    let n3=$ntrain+1
+    let n4=$ntrain+$nvalid
+    let n5=$ntrain+$nvalid+1
+    let n6=$ntrain+$nvalid+$ntest
+
+    cutlist $n1 $n2 $formula >> list.training
+    cutlist $n3 $n4 $formula >> list.validation
+    cutlist $n5 $n6 $formula >> list.testing
+done
+
+
+comp=`grep -h SFAC *.res | sed 's/SFAC//g' | grep -E -o '[[:alpha:]]{1,}' | sort | uniq |  awk '{printf $0" " ;}'`
+
+echo "composition space ... " $comp
+
+echo 'building training data ...'
+
+cat list.training | parallel -I% --progress "rescat % | frank $mean -c $comp -r $rmax -nb $numb -p $nump -pmin $pmin -pmax $pmax" > training
+
+echo 'building validation data ...'
+
+cat list.validation | parallel -I% --progress "rescat % | frank $mean -c $comp -r $rmax -nb $numb -p $nump -pmin $pmin -pmax $pmax" > validation
+
+echo 'building testing data ...'
+
+cat list.testing | parallel -I% --progress "rescat % | frank $mean -c $comp -r $rmax -nb $numb -p $nump -pmin $pmin -pmax $pmax" > testing
+
+rm -f list.franks.*
+rm -f list.training list.validation list.testing
+
+echo 'done'
+
+exit 0

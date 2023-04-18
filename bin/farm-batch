@@ -1,0 +1,10 @@
+#!/bin/bash
+
+set -e
+
+cp $(which defarm-batch) ./
+spawn-batch $*
+
+wait
+
+exit 0

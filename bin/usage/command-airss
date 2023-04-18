@@ -1,0 +1,53 @@
+#!/bin/bash
+
+seed='ScH'
+pressure=200
+max=2000
+devmax=10000
+
+opts="-command airss.pl -max ${max} -mpinp 4 -pressure ${pressure} -repose -nbest 1 -devmax ${devmax} -seed $seed -pack -keep"
+nohup spawn-batch -despawn ${opts} &
+echo $! > .pid
+
+#       -pressure f  Pressure (0.0)
+#       -prand       Randomise pressures (false)
+#       -pmin        Minimum pressure for randomisation (0.0)
+#       -devmin      Minimum deviation for repose (0.0)
+#       -devmax      Maximum deviation for repose (10000.0)
+#       -build       Build structures only (false)
+#       -pp0         Use pair potentials rather than Castep (0D) (false)
+#       -gosh        Use pair potentials rather than Castep (0D) (false)
+#       -pp3         Use pair potentials rather than Castep (3D) (false)
+#       -repose      Use data derived potentials rather than Castep (3D) (false)
+#       -gulp        Use gulp rather than Castep (false)
+#       -lammps      Use LAMMPS rather than Castep (false)
+#       -gap         Use GAP through QUIP/QUIPPY/ASE (false)
+#       -ps4         Use psi4 (false)
+#       -vasp        Use VASP (false)
+#       -qe          Use Quantum Espresso (false)
+#       -python      Use relax.py script (false)
+#       -castep      Use CASTEP in addition to alternative (false)
+#       -exec        Use this executable
+#       -launch      Use this parallel launcher
+#       -cluster     Use cluster settings for symmetry finder (false)
+#       -slab        Use slab settings (false)
+#       -dos         Calculate DOS at Ef (false)
+#       -workdir  s  Work directory ('.')
+#       -max      n  Maximum number of structures (1000000)
+#       -num      n  Number of trials (0)
+#       -amp      f  Amplitude of ion move (-1.5)
+#       -camp     f  Amplitude of cell move (0.0)
+#       -mode        Choose moves based on low lying vibrational modes (false)
+#       -minmode  n  Lowest mode (4)
+#       -sim      f  Threshold for structure similarity (0.0)
+#       -symm     f  Symmetrise on-the-fly (0.0)
+#       -nosymm   f  No symmetry (0)
+#       -mpinp    n  Number of cores per mpi Castep (1)
+#       -steps    n  Max number of geometry optimisation steps (400)
+#       -nbest    n  Best of n kept (1)
+#       -best        Only keep the best structures for each composition (false)
+#       -track       Keep the track of good structures during relax and shake (false)
+#       -keep        Keep intermediate files (false)
+#       -pack        Concatenate the res files (false)
+#       -harvest     Collect intermediate structures as res files (false)
+#       -seed     s  Seedname ('NONE')
