@@ -26,14 +26,13 @@ run setup.sh script:
 - This script is applicable to all applications, but is specifically designed for use with `airss.pl` and `crud.pl` in  _ab initio_ random structure searching ([AIRSS](https://www.mtg.msm.cam.ac.uk/Codes/AIRSS)) package and `forge` in ephemeral data derived potential ([EDDP](https://www.mtg.msm.cam.ac.uk/Codes/EDDP)) package.
 - It creates `jobscript-program.sh` and `despawn-batch` files in the working directory. As soon as a job is started, a `.spawnpid.*` file is created for each subjob. The file contains details of each subjob.
 - It automatically resubmits the job if the job is terminated due to the wall clock limit.
-- For example, you can run a total of 20 instances of airss.pl jobs on 2 compute nodes, each of which has 40 cores,
+- For example,
 
-  `nohup spawn-batch -nj 20 -nc 40 -sch slurm --partition standard --qos standard --time 24:00:00 --account e89-camm -command airss.pl -mpinp 4 -seed Li -max 100 &`
+  `nohup spawn-batch -command airss.pl -mpinp 4 -seed Li -max 100 &`
 
 - The following command line can be used to stop the spawn-batch script and the running jobs. The `spawn-batch` script detects the STOP file, runs `despawn-batch` and stops itself.
 
   `touch STOP`
-- For ARCHER2 and MICHAEL, you do not need to specify -sch, -nc, and options for scheduler. Those are automatically set but you can overwrite defaults by specifing the options.
 
 ### farm-batch
 
