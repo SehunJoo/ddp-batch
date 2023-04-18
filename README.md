@@ -1,4 +1,4 @@
-# ddp-scripts
+# ddp-batch
 
 ## Installation
 install the package with:
