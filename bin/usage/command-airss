@@ -1,12 +1,14 @@
 #!/bin/bash
 
-seed='ScH'
-pressure=200
-max=2000
+seed='Li'
+pressure=100
+max=100
 devmax=10000
 
-opts="-command airss.pl -max ${max} -mpinp 4 -pressure ${pressure} -repose -nbest 1 -devmax ${devmax} -seed $seed -pack -keep"
-nohup spawn-batch -despawn ${opts} &
+opts="-command airss.pl -max ${max} -mpinp 4 -pressure ${pressure} -seed $seed"
+#opts="-command airss.pl -max ${max} -mpinp 4 -pressure ${pressure} -repose -nbest 1 -devmax ${devmax} -seed $seed -pack -keep"
+#nohup spawn-batch -despawn ${opts} &
+nohup spawn-batch -bakres mv -despawn ${opts} &
 echo $! > .pid
 
 #       -pressure f  Pressure (0.0)

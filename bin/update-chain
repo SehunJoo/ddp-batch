@@ -43,7 +43,7 @@ function gen_chainbatch {
     
     ## generate data by relaxation of random structures using repose, and computing energy using castep
     sed -n '/^## generate data by relaxation of random structures using repose/,/^}/p' $chain \
-        | sed    -e "/airss.pl/      s/spawn airss.pl/spawn-batch ${opts} -command airss.pl -max \$minima/" \
+        | sed    -e "/airss.pl/      s/spawn airss.pl/spawn-batch ${opts} -command airss.pl -max \$minima -keep/" \
                  -e '/airss.pl/      s/$seed/$seed \&/ ' \
                  -e '/despawn/       s/despawn/.\/despawn-batch/' \
                  -e "/crud.pl/       s/spawn-slow/spawn-batch ${opts} -command/" \
