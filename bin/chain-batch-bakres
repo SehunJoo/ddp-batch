@@ -497,7 +497,9 @@ nmarks=`ls -1 ./marks/$seed-*.res 2>/dev/null | wc -l`
 
 # generate an initial potential
 
-genpot
+if ! ls *.eddp &>/dev/null; then
+    genpot
+fi
 
 # start cycles
 

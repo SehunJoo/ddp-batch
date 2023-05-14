@@ -121,41 +121,28 @@ if [[ $nopts_sge -gt 0 ]]
 then
     sched='sge'
     schedopt=$(echo "$schedopt" | sed -n '/^#\$/p')
+    sched_nnodes=$(echo "$schedopt" | sed -n '/ -t /p' | awk '{print $3}' | awk 'BEGIN {FS="-"} {print $2}')
     sched_ncores_per_node=$(echo "$schedopt" | sed -n '/ -pe /p' | awk '{print $4}')
-    sched_nnodes_per_job='1'
-    sched_njobs_per_array=$(echo "$schedopt" | sed -n '/ -t /p' | awk '{print $3}' | awk 'BEGIN {FS="-"} {print $2}')
 
 elif [[ $nopts_slurm -gt 0 ]]
 then
     sched='slurm'
     schedopt=$(echo "$schedopt" | sed -n '/^#SBATCH/p')
+    sched_nnodes=$(echo "$schedopt" | sed -n '/--array/p' | awk 'BEGIN {FS="--array="} {print $2}' | awk 'BEGIN {FS="-"} {print $2}')
     sched_ncores_per_node=$(echo "$schedopt" | sed -n '/--tasks-per-node/p' | awk 'BEGIN {FS="--tasks-per-node="} {print $2}')
-    sched_nnodes_per_job=$(echo "$schedopt" | sed -n '/--nodes/p' | awk 'BEGIN {FS="--nodes="} {print $2}')
-    sched_njobs_per_array=$(echo "$schedopt" | sed -n '/--array/p' | awk 'BEGIN {FS="--array="} {print $2}' | awk 'BEGIN {FS="-"} {print $2}')
 else
     echo "sge | slurm is only available" && exit 1
 fi
 
-echo "number of nodes          : $sched_nnodes_per_job"
-echo "number of cores          : ${sched_ncores_per_node}/node"
+#echo "number of nodes          : $sched_nnodes"
+#echo "number of cores          : ${sched_ncores_per_node}/node"
 
-# for underpopulation of node
 ncores_per_node=$(echo "$nonschedopt" | grep 'ncores_per_node' | awk 'BEGIN {FS="="} {print $2}' | awk '{print $1}')
-[[ -z $ncores_per_node ]] && ncores_per_node=$sched_ncores_per_node
-
-# number of nodes
-nnodes_per_job=$sched_nnodes_per_job
-nnodes_per_array=$(echo "$nnodes_per_job * $sched_njobs_per_array" | bc)
-
-# number of subjobs
-nsubjobs_per_node=$(echo "$ncores_per_node/$mpinp" | bc)
-nsubjobs_per_job=$(echo "$nsubjobs_per_node*$nnodes_per_job" | bc)
-nsubjobs_per_array=$(echo "$nsubjobs_per_node*$nnodes_per_array" | bc)
-
-# memory per subjob
 mem_per_core=$(echo "$nonschedopt" | grep 'mem_per_core' | awk 'BEGIN {FS="="} {print $2}' | awk '{print $1}')
-mem_per_subjob=$(( $mem_per_core * $mpinp ))
-
+mem_per_job=$(( $mem_per_core * $mpinp ))
+[[ -z $ncores_per_node ]] && ncores_per_node=$sched_ncores_per_node
+njobs_per_node=$(echo "$ncores_per_node/$mpinp" | bc)              # maximum number of jobs per node
+njobs=$(echo "$njobs_per_node*$sched_nnodes" | bc)                 # total number of jobs to be run
 
 jobscript="jobscript_${program}.sh"
 
@@ -195,28 +182,24 @@ echo '    for batch queuing system'
 echo
 echo '    summary of parameters - '
 echo
-echo "      jobscript  : $jobscript"
-echo "      scheduler  : $sched"
+echo "      jobscript           : $jobscript"
+echo "      scheduler           : $sched"
 echo
-echo "      cores      : $ncores_per_node out of $sched_ncores_per_node/node (used/allocated)"
-echo "      memory     : ${mem_per_core}M/core (used)"
+echo "      nodes(allocated)    : $sched_nnodes"
+echo "      cores(allocated)    : $sched_ncores_per_node/node"
+echo "      cores(used)         : $ncores_per_node/node"
+echo "      memory(used)        : ${mem_per_core}M/core"
+echo "      mpinp               : $mpinp"
+echo "      subjobs             : $njobs ($njobs_per_node/node)"
 echo
-echo "      nodes      : $nnodes_per_array /array"
-echo "                 : $nnodes_per_job /job"
-echo
-echo "      mpinp      : $mpinp"
-echo
-echo "      subjobs    : $nsubjobs_per_array /array"
-echo "                 : $nsubjobs_per_job /job"
-echo "                 : $nsubjobs_per_node /node"
-echo
-echo "      command    : $cmdline"
-echo "      program    : $program"
-echo "      seed       : $seed"
-echo "      despawn    : $despawn"
-echo "      bakres     : $bakres"
+echo "      command             : $cmdline"
+echo "      program             : $program"
+echo "      seed                : $seed"
+echo "      despawn             : $despawn"
+echo "      bakres              : $bakres"
 [[ $program == "airss" ]] && echo "      max                 : $max"
 [[ $program == "forge" ]] && echo "      numpot              : $numpot"
+
 
 ## generate batch script to run an MPI paralleli array job under Sun Grid Engine (SGE) batch queuing system
 
@@ -280,62 +263,51 @@ function genjob {
     (
         echo '# launch program'
         echo
-        if [[ $sched == 'slurm' ]]
-        then
-            echo 'nodelist=$(scontrol show hostnames $SLURM_JOB_NODELIST)'
-        elif [[ $sched == 'sge' ]]
-        then
-            echo "nodelist='1'"
-        fi
-        echo
-        echo 'for nodeid in $nodelist'
+        echo "for i in {1..${njobs_per_node}}"
         echo 'do'
-        echo "    for i in {1..${nsubjobs_per_node}}"
-        echo '    do'
         
         if [[ $program == 'airss' || $program == 'crud' ]]
         then
             if [[ $exe == 'castep' ]] && [[ $sched == 'sge'   ]]
             then
-                echo "        ${cmdline}"'\'
-                echo "            -launch 'mpirun -np '"' \'
-                echo "            -exec 'castep.mpi' &"
+                echo "    ${cmdline}"'\'
+                echo "        -launch 'mpirun -np '"' \'
+                echo "        -exec 'castep.mpi' &"
 
             elif [[ $exe == 'castep' ]] && [[ $sched == 'slurm' ]]
             then
-                echo "        ${cmdline}"' \'
-                echo '            -launch "srun --nodelist=${nodeid} --exact --nodes=1 --cpus-per-task=1 --mem='"${mem_per_subjob}"'M  --tasks-per-node='"${mpinp}"'  --ntasks=" \'
-                echo "            -exec 'castep.mpi' &"
+                echo "    ${cmdline}"' \'
+                echo "        -launch 'srun --exact --nodes=1 --cpus-per-task=1 --mem=${mem_per_job}M  --tasks-per-node=${mpinp}  --ntasks='"' \'
+                echo "        -exec 'castep.mpi' &"
 
             elif [[ $exe == 'repose' ]]
             then
-                echo "        ${cmdline} &"
+                echo "    ${cmdline} &"
             fi
 
         elif [[ $program == 'forge' ]]
         then
-            echo '        ${cmdline}.${jids}.${i}  < /dev/null \'
-            echo '                                 > ${seed}/${seed}.${jids}.${nodeid}.${i}.out \'
-            echo '                                2> ${seed}/${seed}.${jids}.${nodeid}.${i}.err &'
+            echo '    ${cmdline}.${jids}.${i}  < /dev/null \'
+            echo '                             > ${seed}/${seed}.${jids}.${i}.out \'
+            echo '                            2> ${seed}/${seed}.${jids}.${i}.err &'
 
         else
-            echo "        ${cmdline} < /dev/null >& /dev/null &"
+            echo "    ${cmdline} < /dev/null >& /dev/null &"
         fi
 
         echo ''
-        echo '        pid=$!'
-        echo '        pgid=`ps -o pgid= ${pid}`'
-        echo '        echo "--------------------${jids}.${i}"                  > ${prefix}.${jids}.${nodeid}.${i}'
-        echo '        echo "program:            ${program}"                   >> ${prefix}.${jids}.${nodeid}.${i}'
-        echo '        echo "command:            ${cmdline}"                   >> ${prefix}.${jids}.${nodeid}.${i}'
-        echo '        echo "jobid:              ${jobid}"                     >> ${prefix}.${jids}.${nodeid}.${i}'
-        echo '        echo "taskid:             ${taskid}"                    >> ${prefix}.${jids}.${nodeid}.${i}'
-        echo '        echo "pid:                ${pid}"                       >> ${prefix}.${jids}.${nodeid}.${i}'
-        echo '        echo "pgid:               ${pgid}"                      >> ${prefix}.${jids}.${nodeid}.${i}'
-        echo '        echo "mpinp:              ${mpinp}"                     >> ${prefix}.${jids}.${nodeid}.${i}'
-        echo '        echo "submit_time:        ${t_submit}"                  >> ${prefix}.${jids}.${nodeid}.${i}'
-        echo '        echo "start_time:         ${t_start}"                   >> ${prefix}.${jids}.${nodeid}.${i}'
-        echo '    done'
+        echo '    pid=$!'
+        echo '    pgid=`ps -o pgid= ${pid}`'
+        echo '    echo "--------------------${jids}.${i}"                  > ${prefix}.${jids}.${i}'
+        echo '    echo "program:            ${program}"                   >> ${prefix}.${jids}.${i}'
+        echo '    echo "command:            ${cmdline}"                   >> ${prefix}.${jids}.${i}'
+        echo '    echo "jobid:              ${jobid}"                     >> ${prefix}.${jids}.${i}'
+        echo '    echo "taskid:             ${taskid}"                    >> ${prefix}.${jids}.${i}'
+        echo '    echo "pid:                ${pid}"                       >> ${prefix}.${jids}.${i}'
+        echo '    echo "pgid:               ${pgid}"                      >> ${prefix}.${jids}.${i}'
+        echo '    echo "mpinp:              ${mpinp}"                     >> ${prefix}.${jids}.${i}'
+        echo '    echo "submit_time:        ${t_submit}"                  >> ${prefix}.${jids}.${i}'
+        echo '    echo "start_time:         ${t_start}"                   >> ${prefix}.${jids}.${i}'
         echo 'done'
         echo
         echo 'sleep 5'
@@ -365,17 +337,14 @@ function genjob {
             echo '    rt_m=$(( (${tsec_run}/60) - (${rt_h}*60) ))'
             echo '    rt_s=$(( ${tsec_run} - (${tsec_run}/60)*60 ))'
             echo 
-            echo '    for nodeid in $nodelist'
+            echo "    for i in {1..${njobs_per_node}}"
             echo '    do'
-            echo "        for i in {1..${nsubjobs_per_node}}"
-            echo '        do'
-            echo '            sed -i "/check_time/d"                                    ${prefix}.${jids}.${nodeid}.${i}'
-            echo '            sed -i "/run_time/d"                                      ${prefix}.${jids}.${nodeid}.${i}'
-            echo '            sed -i "/no. structures/d"                                ${prefix}.${jids}.${nodeid}.${i}'
-            echo '            echo "check_time:         ${t_check}"                  >> ${prefix}.${jids}.${nodeid}.${i}'
-            echo '            echo "run_time:           ${rt_h}:${rt_m}:${rt_s}"     >> ${prefix}.${jids}.${nodeid}.${i}'
-            echo '            echo "no. structures:     ${counter}"                  >> ${prefix}.${jids}.${nodeid}.${i}'
-            echo '        done'
+            echo '        sed -i "/check_time/d"                                    ${prefix}.${jids}.${i}'
+            echo '        sed -i "/run_time/d"                                      ${prefix}.${jids}.${i}'
+            echo '        sed -i "/no. structures/d"                                ${prefix}.${jids}.${i}'
+            echo '        echo "check_time:         ${t_check}"                  >> ${prefix}.${jids}.${i}'
+            echo '        echo "run_time:           ${rt_h}:${rt_m}:${rt_s}"     >> ${prefix}.${jids}.${i}'
+            echo '        echo "no. structures:     ${counter}"                  >> ${prefix}.${jids}.${i}'
             echo '    done'
             echo 'done'
             echo 
@@ -389,7 +358,7 @@ function genjob {
             echo
             echo 'counter=1'
             echo
-            echo "until [[ \${counter} -eq ${nsubjobs_per_job} ]]"
+            echo "until [[ \${counter} -eq ${njobs} ]]"
             echo 'do'
             echo '    sleep 1'
             echo 
@@ -402,17 +371,14 @@ function genjob {
             echo '    rt_m=$(( (${tsec_run}/60) - (${rt_h}*60) ))'
             echo '    rt_s=$(( ${tsec_run} - (${tsec_run}/60)*60 ))'
             echo 
-            echo '    for nodeid in $nodelist'
+            echo "    for i in {1..${njobs_per_node}}"
             echo '    do'
-            echo "        for i in {1..${nsubjobs_per_node}}"
-            echo '        do'
-            echo '            sed -i "/check_time/d"                                     ${prefix}.${jids}.${nodeid}.${i}'
-            echo '            sed -i "/run_time/d"                                       ${prefix}.${jids}.${nodeid}.${i}'
-            echo '            sed -i "/no. structures/d"                                 ${prefix}.${jids}.${nodeid}.${i}'
-            echo '            echo "check_time:         ${t_check}"                   >> ${prefix}.${jids}.${nodeid}.${i}'
-            echo '            echo "run_time:           ${rt_h}:${rt_m}:${rt_s}"      >> ${prefix}.${jids}.${nodeid}.${i}'
-            echo '            echo "no. structures:     ${counter}"                   >> ${prefix}.${jids}.${nodeid}.${i}'
-            echo '        done'
+            echo '        sed -i "/check_time/d"                                     ${prefix}.${jids}.${i}'
+            echo '        sed -i "/run_time/d"                                       ${prefix}.${jids}.${i}'
+            echo '        sed -i "/no. structures/d"                                 ${prefix}.${jids}.${i}'
+            echo '        echo "check_time:         ${t_check}"                   >> ${prefix}.${jids}.${i}'
+            echo '        echo "run_time:           ${rt_h}:${rt_m}:${rt_s}"      >> ${prefix}.${jids}.${i}'
+            echo '        echo "no. structures:     ${counter}"                   >> ${prefix}.${jids}.${i}'
             echo '    done'
             echo 'done'
             echo 
@@ -440,17 +406,14 @@ function genjob {
             echo '    rt_m=$(( (${tsec_run}/60) - (${rt_h}*60) ))'
             echo '    rt_s=$(( ${tsec_run} - (${tsec_run}/60)*60 ))'
             echo 
-            echo '    for nodeid in $nodelist'
+            echo "    for i in {1..${njobs_per_node}}"
             echo '    do'
-            echo "        for i in {1..${nsubjobs_per_node}}"
-            echo '        do'
-            echo '            sed -i "/check_time/d"                                     ${prefix}.${jids}.${nodeid}.${i}'
-            echo '            sed -i "/run_time/d"                                       ${prefix}.${jids}.${nodeid}.${i}'
-            echo '            sed -i "/no. potentials/d"                                 ${prefix}.${jids}.${nodeid}.${i}' 
-            echo '            echo "check_time:         ${t_check}"                   >> ${prefix}.${jids}.${nodeid}.${i}'   
-            echo '            echo "run_time:           ${rt_h}:${rt_m}:${rt_s}"      >> ${prefix}.${jids}.${nodeid}.${i}'
-            echo '            echo "no. potentials:     ${counterddp}"                >> ${prefix}.${jids}.${nodeid}.${i}'
-            echo '        done'
+            echo '        sed -i "/check_time/d"                                     ${prefix}.${jids}.${i}'
+            echo '        sed -i "/run_time/d"                                       ${prefix}.${jids}.${i}'
+            echo '        sed -i "/no. potentials/d"                                 ${prefix}.${jids}.${i}' 
+            echo '        echo "check_time:         ${t_check}"                   >> ${prefix}.${jids}.${i}'   
+            echo '        echo "run_time:           ${rt_h}:${rt_m}:${rt_s}"      >> ${prefix}.${jids}.${i}'
+            echo '        echo "no. potentials:     ${counterddp}"                >> ${prefix}.${jids}.${i}'
             echo '    done'
             echo 'done'
             echo
@@ -632,16 +595,14 @@ function subjob {
     [[ -z $jobid ]] && echo "    job submission failed" && touch ./STOP && exit 1
 
     echo
-    echo "    program      : ${program}" 
-    echo "    command      : ${cmdline}" 
-    echo "    jobid        : ${jobid}"
-    echo "    no. subjobs  : ${nsubjobs_per_array} /array"
-    echo "    no. subjobs  : ${nsubjobs_per_job} /job"
-    echo "    no. subjobs  : ${nsubjobs_per_node} /node"
-    echo "    no. cores    : $((${nsubjobs_per_array} * ${mpinp})) /array"
-    echo "    no. cores    : $((${nsubjobs_per_job} * ${mpinp})) /job"
-    echo "    no. cores    : $((${nsubjobs_per_node} * ${mpinp})) /node"
-    echo "    no. cores    : ${mpinp} /subjob"
+    echo "    program             : ${program}" 
+    echo "    command             : ${cmdline}" 
+    echo "    jobid               : ${jobid}"
+    echo "    no. jobs  (in total): ${njobs}"
+    echo "    no. jobs  (per node): ${njobs_per_node}"
+    echo "    no. cores (in total): $((${njobs} * ${mpinp}))"
+    echo "    no. cores (per node): $((${njobs_per_node} * ${mpinp}))"
+    echo "    no. cores (per job) : ${mpinp}"
     echo
 
     (   

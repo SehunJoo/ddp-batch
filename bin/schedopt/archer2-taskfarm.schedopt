@@ -1,23 +1,23 @@
 %block default
 #SBATCH --job-name=default
-#SBATCH --time=24:00:00
-#SBATCH --nodes=1
+#SBATCH --time=24:00:00         # Max Walltime : 24 hrs
+#SBATCH --nodes=8               # Max Nodes Per Job : 16
 #SBATCH --tasks-per-node=128
 #SBATCH --cpus-per-task=1
-#SBATCH --array=1-32
+#SBATCH --array=1-32            # Max Jobs Running : 32 # Maximum of 256 nodes in use by any one user at any time
 
 #SBATCH --account=e89-camp
 #SBATCH --partition=standard
 #SBATCH --qos=taskfarm
 
-ncores_per_node=128     # number of cores to be used / for underpopulation of nodes, you can specify fewer processes than cores on compute nodes
-mem_per_core=1500       # memory per core in M
+ncores_per_node=128             # number of cores to be used / for underpopulation of nodes, you can specify fewer processes than cores on compute nodes
+mem_per_core=1500               # memory per core in M
 %endblock default
 
 %block airss
 #SBATCH --job-name=airss
 #SBATCH --time=24:00:00
-#SBATCH --nodes=1
+#SBATCH --nodes=8
 #SBATCH --tasks-per-node=128
 #SBATCH --cpus-per-task=1
 #SBATCH --array=1-32
@@ -26,14 +26,14 @@ mem_per_core=1500       # memory per core in M
 #SBATCH --partition=standard
 #SBATCH --qos=taskfarm
 
-ncores_per_node=128     # number of cores to be used
-mem_per_core=1500       # memory per core in M
+ncores_per_node=128
+mem_per_core=1500
 %endblock airss
 
 %block crud
 #SBATCH --job-name=crud
 #SBATCH --time=24:00:00
-#SBATCH --nodes=1
+#SBATCH --nodes=8
 #SBATCH --tasks-per-node=128
 #SBATCH --cpus-per-task=1
 #SBATCH --array=1-32
@@ -42,14 +42,14 @@ mem_per_core=1500       # memory per core in M
 #SBATCH --partition=standard
 #SBATCH --qos=taskfarm
 
-ncores_per_node=128     # number of cores to be used
-mem_per_core=1500       # memory per core in M
+ncores_per_node=128
+mem_per_core=1500
 %endblock crud
 
 %block forge
 #SBATCH --job-name=forge
 #SBATCH --time=00:20:00
-#SBATCH --nodes=1
+#SBATCH --nodes=8
 #SBATCH --tasks-per-node=128
 #SBATCH --cpus-per-task=1
 #SBATCH --array=1-4
@@ -58,6 +58,6 @@ mem_per_core=1500       # memory per core in M
 #SBATCH --partition=standard
 #SBATCH --qos=short
 
-ncores_per_node=128     # number of cores to be used
-mem_per_core=1500       # memory per core in M
+ncores_per_node=128
+mem_per_core=1500
 %endblock forge
