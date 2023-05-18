@@ -389,7 +389,7 @@ function genjob {
             echo
             echo 'counter=1'
             echo
-            echo "until [[ \${counter} -eq ${nsubjobs_per_job} ]]"
+            echo "until [[ \${counter} -eq 0 ]]"
             echo 'do'
             echo '    sleep 1'
             echo 
