@@ -29,7 +29,7 @@ mem_per_core=4096       # memory per core in M
 %endblock airss
 
 %block crud
-#$ -N airss
+#$ -N crud
 #$ -pe mpi 40
 #$ -t 1-20
 #$ -l mem=4G
