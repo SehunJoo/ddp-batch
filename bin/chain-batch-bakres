@@ -422,9 +422,9 @@ function genpot {
     
     if [[ $nnodes -gt 0 ]]
     then
-	farm forge -ompnp $ompnp -es 10 -n 200 -nn $nnodes -np -q -numpot $numpot -s ./$seed/$seed
+	farm-batch -bakres cp -command forge -ompnp $ompnp -es 10 -n 200 -nn $nnodes -np -q -numpot $minpot -s ./$seed/$seed &
     else
-	farm forge -ompnp $ompnp -es 10 -n 200 -np -q -numpot $numpot -s ./$seed/$seed
+	farm-batch -bakres cp -command forge -ompnp $ompnp -es 10 -n 200 -np -q -numpot $minpot -s ./$seed/$seed &
     fi
     
     counter=0
