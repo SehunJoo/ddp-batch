@@ -3,31 +3,32 @@
 set -e
 
 function usage {
-    echo "usage: $(basename $0) [-c] [-n ncycles] [-p pressure] [-l lowpress] [-R] [-r rcut] [-f full] [-m minima] [-b nbest] [-d deviation] [-j jiggles] [-J Jiggles] [-a amp] [-P npoly] [-L lowexp] [-H highexp] [-B nbody] [-N nnodes] [-E deltae] [-M mpinp] [-F minpot] [-e] [-s seed]" 2>&1
+    echo "usage: $(basename $0) [-c] [-n ncycles] [-p pressure] [-l lowpress] [-R] [-r rcut] [-f full] [-m minima] [-b nbest] [-d deviation] [-j jiggles] [-J Jiggles] [-a amp] [-P npoly] [-L lowexp] [-H highexp] [-B nbody] [-N nnodes] [-E deltae] [-M mpinp] [-O ompnp] [-F minpot] [-e] [-s seed]" 2>&1
     echo '  iteratively generate a data derived potential'
-    echo '   -c            clean up (deletes files)'
-    echo '   -n ncycles    number of cycles'
-    echo '   -p pressure   target pressure (high)'
-    echo '   -l lowpress   target pressure (low)'
-    echo '   -R prand      randomise pressure'
-    echo '   -r rcut       cutoff for features'
-    echo '   -f full       number of fully random structures'
-    echo '   -m minima     number of local minima each cycle'
-    echo '   -b nbest      best of nbest minima retained'    
-    echo '   -d deviation  deviation bias'    
-    echo '   -j jiggles    number of jiggles of local minima'
-    echo '   -J Jiggles    number of jiggles of marker structures'
-    echo '   -a amp        amplitude for jiggling'
-    echo '   -P npoly      number of polynomials'
-    echo '   -L lowexp     lowest exponent'
-    echo '   -H highexp    highest exponent'
-    echo '   -B nbody      highest body order'
-    echo '   -N nnodes     number of nodes in hidden layer'
-    echo '   -E deltae     energy window'
-    echo '   -M mpinp      number of remote parallel cores'
-    echo '   -F minpot     approximate floor for the number of potentials'
-    echo '   -e email      send email to address when completed'
-    echo '   -s seed       seedname'
+    echo '   -c             clean up (deletes files)'
+    echo '   -n ncycles     number of cycles'
+    echo '   -p pressure    target pressure (high)'
+    echo '   -l lowpress    target pressure (low)'
+    echo '   -R prand       randomise pressure'
+    echo '   -r rcut        cutoff for features'
+    echo '   -f full        number of fully random structures'
+    echo '   -m minima      number of local minima each cycle'
+    echo '   -b nbest       best of nbest minima retained'    
+    echo '   -d deviation   deviation bias'    
+    echo '   -j jiggles     number of jiggles of local minima'
+    echo '   -J Jiggles     number of jiggles of marker structures'
+    echo '   -a amp         amplitude for jiggling'
+    echo '   -P npoly       number of polynomials'
+    echo '   -L lowexp      lowest exponent'
+    echo '   -H highexp     highest exponent'
+    echo '   -B nbody       highest body order'
+    echo '   -N nnodes      number of nodes in hidden layer'
+    echo '   -E deltae      energy window'
+    echo '   -M mpinp       number of remote MPI cores'
+    echo '   -O ompnp       number of remote OMP cores'
+    echo '   -F minpot      approximate floor for the number of potentials'
+    echo '   -e email       send email to address when completed'
+    echo '   -s seed        seedname'
     exit 1
 }
 
@@ -53,11 +54,12 @@ nbody=3
 nnodes=5
 deltae=10.0
 mpinp=4
+ompnp=4
 minpot=0
 email='false'
 seed='seed'
 
-optstring=":cs:n:p:l:Rr:f:m:b:d:j:J:a:P:L:H:B:N:E:M:F:eh"
+optstring=":cs:n:p:l:Rr:f:m:b:d:j:J:a:P:L:H:B:N:E:M:O:F:eh"
 
 while getopts ${optstring} arg; do
     case ${arg} in
@@ -121,6 +123,9 @@ while getopts ${optstring} arg; do
 	M)
 	    mpinp="${OPTARG}"
 	    ;;
+ 	O)
+ 	    ompnp="${OPTARG}"
+ 	    ;;
 	F)
 	    minpot="${OPTARG}"
 	    ;;
@@ -204,6 +209,7 @@ echo "      nbody:     "$nbody
 echo "      nnodes:    "$nnodes
 echo "      deltae:    "$deltae
 echo "      mpinp:     "$mpinp
+echo "      ompnp:     "$ompnp
 echo "      minpot:    "$minpot
 echo "      email:     "$email
 echo "      seed:      "$seed
@@ -408,7 +414,7 @@ function genpot {
     
     echo 'launching forge ...'
 
-    #let numjobs=`cat ~/.spawn | grep -v ^# | awk '{print $2}' | awk -v np="$mpinp" -F'=' '{sum+=int($2/np)} END {print sum}'`
+    #let numjobs=`cat ~/.spawn | grep -v ^# | awk '{print $2}' | awk -v np="$ompnp" -F'=' '{sum+=int($2/np)} END {print sum}'`
 
     #let numpot=$minpot/$numjobs+1
 
@@ -416,9 +422,9 @@ function genpot {
     
     if [[ $nnodes -gt 0 ]]
     then
-	farm-batch  -command forge -mpinp $mpinp -es 10 -n 200 -nn $nnodes -np -q -numpot $minpot -s ./$seed/$seed &
+	farm forge -ompnp $ompnp -es 10 -n 200 -nn $nnodes -np -q -numpot $numpot -s ./$seed/$seed
     else
-	farm-batch  -command forge -mpinp $mpinp -es 10 -n 200 -np -q -numpot $minpot -s ./$seed/$seed &
+	farm forge -ompnp $ompnp -es 10 -n 200 -np -q -numpot $numpot -s ./$seed/$seed
     fi
     
     counter=0
@@ -464,7 +470,7 @@ function genpot {
 	let num_local_cores=1
     fi
     
-    ls $seed/$seed*.ddp | flock -mpinp $num_local_cores -p $meanpress -v -q > $seed.eddp
+    ls $seed/$seed*.ddp | flock -ompnp $num_local_cores -p $meanpress -v -q > $seed.eddp
     dir=$(date +%y%m%d-%H%M%S)-flock
     mkdir $dir
     cp flock-* $dir

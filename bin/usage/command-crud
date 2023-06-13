@@ -1,6 +1,11 @@
 #!/bin/bash
 
+<<<<<<< HEAD
 opts="-command crud.pl -mpinp 24 -nostop"
 #opts="-command crud.pl -mpinp 4 -repose -nostop"
+=======
+opts="-command crud.pl -mpinp 32 -nostop"
+#opts="-command crud.pl -mpinp 4 -repose"
+>>>>>>> eae3d9539416179b7415f3be42a0701889d9121b
 nohup spawn-batch -despawn ${opts} &
 echo $! > .pid
