@@ -663,16 +663,31 @@ function monjob {
 
     counter=1
     success='false'
+    repeat=3
 
-    until [[ $counter -eq 0 ]] || [[ $success == 'true' ]]
+    until [[ $repeat -eq 0 ]] || [[ $success == 'true' ]]
     do
-        sleep 1
+        sleep 60
+
+        # count the number of jobs
 
         [[ $sched == 'sge' ]] && counter=$(qstat -u $USER -g d | grep $jobid | wc -l)
         [[ $sched == 'slurm' ]] && counter=$(squeue --noheader --job=$jobid --array --user=$USER | wc -l)
+
+        if [[ $counter -eq 0 ]]
+        then
+            repeat=$(( $repeat - 1 ))
+        else
+            repeat=3
+        fi
+            
         echo -e -n "\r    ${counter} jobs pending/running"
 
+        # check if STOP file is created
+
         [[ -f './STOP' ]] && echo -e '\n    stopping spawn-batch ...' && ./despawn-batch && exit 0
+
+        # check if the job has been completed
 
         [[ -f DONE_${jobid} ]] && echo -e '\n    job has been completed ...' && success='true'
     done
@@ -685,14 +700,21 @@ function monjob {
 
     elif [[ $success == 'false' ]]
     then
+
         echo '    job is terminated by wall clock limit'
-        echo '    resubmit the job'
+        
+        # make sure that the job is terminated
+
+        [[ $sched == 'sge' ]] && qdel $jobid
+        [[ $shced == 'slurm' ]] && scancel $jobid
 
         rename '.spawnpids' '.fail.spawnpids' .spawnpids.*
 
+        # clean up intermediate result files where calculations are not fully completed
+
         if [[ $program == 'airss' ]]
         then
-            for f in $(ls ScH-*.cell)
+            for f in $(ls $seed-*.cell)
             do
                 seedairss=${f%%.cell}
                 [[ ! -f $seedairss.res ]] && ls $seedairss.* | xargs rm -f
@@ -720,6 +742,8 @@ function monjob {
                 done
             fi
         fi
+
+        echo '    resubmit the job'
     fi
 
     echo 'done'

@@ -56,9 +56,9 @@ function gen_chainbatch {
         | sed    -e '/let numjobs/   s/let/#let/ ' \
                  -e '/let numpot/    s/let/#let/ ' \
                  -e '/let maxpot/    s/let/#let/ ' \
-                 -e '/forge -mpinp/  s/-numpot $numpot/-numpot $minpot/ ' \
-                 -e "/forge -mpinp/  s/farm/farm-batch ${opts} -command/ " \
-                 -e '/forge -mpinp/  s/$seed\/$seed/$seed\/$seed \&/ ' \
+                 -e '/forge -ompnp/  s/-numpot $numpot/-numpot $minpot/ ' \
+                 -e "/forge -ompnp/  s/farm/farm-batch ${opts} -command/ " \
+                 -e '/forge -ompnp/  s/$seed\/$seed/$seed\/$seed \&/ ' \
                  -e "/echo 'maximum/ s/echo/#echo/ " \
                  -e '/let waitpot/   s/let/#let/ ' \
                  -e "/echo 'waiting/ s/echo/#echo/ " \
@@ -167,7 +167,7 @@ function gen_chainbatch_genpot {
 
     ## genpot
     sed -n '/^## construct ensemble potentials/,/^}/p' $chainbatch \
-    | sed    -e "/forge -mpinp/  s/-bakres cp// " \
+    | sed    -e "/forge -ompnp/  s/-bakres cp// " \
     >> $chainbatch.temp
     echo >> $chainbatch.temp
 
