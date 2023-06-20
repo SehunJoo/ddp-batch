@@ -727,18 +727,14 @@ function monjob {
                 rm -f bad_castep/*.{cell,param,castep}
                 find . ./bad_castep -maxdepth 1 -type f -name "*.res" | sed '/data.res/d' | xargs mv -t ./hopper
             fi
-            if ls *.res &>/dev/null
+            if ls *.castep &>/dev/null
             then
-                for resfile in $(ls *.res | grep -v 'data.res')
+                for castepfile in `ls *.castep`
                 do
-                    seedcrud=${resfile%%.res}
+                    seedcrud=${castepfile%%.res}
                     echo $seedcrud
-                    if [[ $(sed -n '/^task/p' *.param | wc -l) -gt 0 ]]; then
-                        castep2res $seedcrud > $seedcrud.res.tmp
-                        mv $seedcrud.res.tmp $seedcrud.res
-                    fi
-                    mv $seedcrud.res ./hopper
-                    rm -f $seedcrud.{cell,param,castep}
+                    castep2res $seedcrud > hopper/$seedcrud.res
+                    rm -f $seedcrud.{cell,param,castep,res}
                 done
             fi
         fi
