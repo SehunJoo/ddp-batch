@@ -457,7 +457,6 @@ function genjob {
         ) >> $jobscript
     fi
 
-    echo 'wait' >> $jobscript
     echo 'touch DONE_${jobid}' >> $jobscript
     echo 'exit 0' >> $jobscript
 
