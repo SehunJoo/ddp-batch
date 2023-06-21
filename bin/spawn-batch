@@ -389,7 +389,7 @@ function genjob {
             echo
             echo 'counter=1'
             echo
-            echo "until [[ \${counter} -eq 0 ]]"
+            echo "until [[ \${counter} -eq ${nsubjobs_per_array} ]]"
             echo 'do'
             echo '    sleep 1'
             echo 
@@ -417,6 +417,8 @@ function genjob {
             echo 'done'
             echo 
             echo 'sleep 5'
+            echo 
+            echo 'wait'
             echo 
         ) >> $jobscript
     elif [[ $program == "forge" ]]
