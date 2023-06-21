@@ -5,7 +5,7 @@ opts="-M 4  -O 4"                                   # options to set the number 
 opts="${opts} -f 1000 -m 100 -n 5"                  # options to control number of data
 opts="${opts} -d 0.0   -a 0.02"                     # options to control dataset construction
 opts="${opts} -p 0.0001 -l 0.0 -R"                  # options to set the range of pressure
-opts="${opts} -E 2000 -B 3 -P 5 -r 7 -L 2 -H 10"    # options to generate feature vector
+opts="${opts} -E 10   -B 3 -P 5 -r 7 -L 2 -H 10"    # options to generate feature vector
 opts="${opts} -F 256"                               # options to control number of ddp potentials
 
 nohup chain-batch ${opts} -s $seed &
