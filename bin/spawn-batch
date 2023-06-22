@@ -668,11 +668,11 @@ function monjob {
 
     counter=1
     success='false'
-    repeat=3
+    repeat=12
 
     until [[ $repeat -eq 0 ]] || [[ $success == 'true' ]]
     do
-        sleep 60
+        sleep 5
 
         # count the number of jobs
 
@@ -683,9 +683,9 @@ function monjob {
         then
             repeat=$(( $repeat - 1 ))
         else
-            repeat=3
+            repeat=12
         fi
-            
+
         echo -e -n "\r    ${counter} jobs pending/running"
 
         # check if STOP file is created
