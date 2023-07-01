@@ -152,13 +152,22 @@ nsubjobs_per_node=$(echo "$ncores_per_node/$mpinp" | bc)
 nsubjobs_per_job=$(echo "$nsubjobs_per_node*$nnodes_per_job" | bc)
 nsubjobs_per_array=$(echo "$nsubjobs_per_node*$nnodes_per_array" | bc)
 
+# nodes per subjob - parallelising over several nodes
+# only makes sense if we don't request more than one subjob per node
+if [ $nsubjobs_per_node -eq 1 ]; then
+	nnodes_per_subjob=$(echo "$nonschedopt" | grep 'nnodes_per_subjob' | awk 'BEGIN {FS="="} {print $2}' | awk '{print $1}')
+fi
+[[ -z $nnodes_per_subjob ]] && nnodes_per_subjob=1
+
+# update cmdline to use the total number of cores
+total_mpinp=$(( $mpinp * $nnodes_per_subjob))
+cmdline=`echo $cmdline | sed "s/-mpinp $mpinp/-mpinp $total_mpinp/g"`
+
 # memory per subjob
 mem_per_core=$(echo "$nonschedopt" | grep 'mem_per_core' | awk 'BEGIN {FS="="} {print $2}' | awk '{print $1}')
 mem_per_subjob=$(( $mem_per_core * $mpinp ))
 
-
 jobscript="jobscript_${program}.sh"
-
 
 # check before proceeding
 
@@ -283,6 +292,21 @@ function genjob {
         if [[ $sched == 'slurm' ]]
         then
             echo 'nodelist=$(scontrol show hostnames $SLURM_JOB_NODELIST)'
+	    
+	    if [ $nnodes_per_subjob -gt 1 ]; then
+		echo 'temp=($nodelist)'
+		echo 'nodelist_new=""'
+		echo 'for ((i=0; i<${#temp[@]}; i+='"$nnodes_per_subjob"')); do'
+		echo 'single_job_nodelist=""'
+		echo 'for j in `seq 1 '"$nnodes_per_subjob"'`; do'
+		echo 'index=$(( i+j-1 ))'
+		echo 'single_job_nodelist+="${temp[index]},"'
+		echo 'done'
+		echo 'nodelist_new+=" ${single_job_nodelist%,*}"'
+		echo 'done'
+		echo 'nodelist=$nodelist_new'
+	    fi
+
         elif [[ $sched == 'sge' ]]
         then
             echo "nodelist='1'"
@@ -304,7 +328,7 @@ function genjob {
             elif [[ $exe == 'castep' ]] && [[ $sched == 'slurm' ]]
             then
                 echo "        ${cmdline}"' \'
-                echo '            -launch "srun --nodelist=${nodeid} --exact --nodes=1 --cpus-per-task=1 --mem='"${mem_per_subjob}"'M  --tasks-per-node='"${mpinp}"'  --ntasks=" \'
+                echo '            -launch "srun --nodelist=${nodeid} --exact --nodes='"${nnodes_per_subjob}"' --cpus-per-task=1 --mem='"${mem_per_subjob}"'M  --tasks-per-node='"${mpinp}"'  --ntasks=" \'
                 echo "            -exec 'castep.mpi' &"
 
             elif [[ $exe == 'repose' ]]
