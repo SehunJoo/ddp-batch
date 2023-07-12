@@ -3,7 +3,7 @@
 set -e
 
 function usage {
-    echo "usage: $(basename $0) [-c] [-n ncycles] [-p pressure] [-l lowpress] [-R] [-r rcut] [-f full] [-m minima] [-b nbest] [-d deviation] [-j jiggles] [-J Jiggles] [-a amp] [-P npoly] [-L lowexp] [-H highexp] [-B nbody] [-N nnodes] [-E deltae] [-M mpinp] [-O ompnp] [-F minpot] [-e] [-s seed]" 2>&1
+    echo "usage: $(basename $0) [-c] [-n ncycles] [-p pressure] [-l lowpress] [-R] [-r rcut] [-f full] [-m minima] [-b nbest] [-d deviation] [-j jiggles] [-J Jiggles] [-a amp] [-T temp] [-S step] [-t time] [-P npoly] [-L lowexp] [-H highexp] [-B nbody] [-N nnodes] [-E deltae] [-M mpinp] [-O ompnp] [-F minpot] [-e] [-s seed]" 2>&1
     echo '  iteratively generate a data derived potential'
     echo '   -c             clean up (deletes files)'
     echo '   -n ncycles     number of cycles'
@@ -18,6 +18,9 @@ function usage {
     echo '   -j jiggles     number of jiggles of local minima'
     echo '   -J Jiggles     number of jiggles of marker structures'
     echo '   -a amp         amplitude for jiggling'
+    echo '   -T temp        temperature for thermalising'
+    echo '   -S step        time step for thermalising (fs)'
+    echo '   -t time        time for thermalising (ps)'
     echo '   -P npoly       number of polynomials'
     echo '   -L lowexp      lowest exponent'
     echo '   -H highexp     highest exponent'
@@ -47,6 +50,9 @@ deviation=0.0
 jiggles=10
 Jiggles=100
 amp=0.02
+temp='none'
+step=1
+time=10
 npoly=5
 lowexp=2
 highexp=10
@@ -59,7 +65,7 @@ minpot=0
 email='false'
 seed='seed'
 
-optstring=":cs:n:p:l:Rr:f:m:b:d:j:J:a:P:L:H:B:N:E:M:O:F:eh"
+optstring=":cs:n:p:l:Rr:f:m:b:d:j:J:a:T:S:t:P:L:H:B:N:E:M:O:F:eh"
 
 while getopts ${optstring} arg; do
     case ${arg} in
@@ -102,6 +108,15 @@ while getopts ${optstring} arg; do
 	a)
 	    amp="${OPTARG}"
 	    ;;
+ 	T)
+ 	    temp="${OPTARG}"
+ 	    ;;
+  	S)
+  	    step="${OPTARG}"
+  	    ;;
+  	t)
+  	    time="${OPTARG}"
+  	    ;;
 	P)
 	    npoly="${OPTARG}"
 	    ;;
@@ -165,11 +180,12 @@ fi
 if [[ ${clean} == true ]];then
     echo 'cleaning up. files will be deleted, do you wish to proceed?'
 
-    select yesno in "yes" "no"; do
-	case $yesno in
-            yes ) rm -fr flock-*.agr flock-*.delta $seed $seed.eddp $seed.cell.* $seed-*.* training validation testing data.res good_castep hopper bad_castep list.franks sed* STOP jobscript_*.sh DONE_* ; ./despawn-batch 2> /dev/null ; ./defarm-batch 2 >/dev/null ;  rm -fr  despawn-batch defarm-batch; exit 0;;
-            no ) exit 1;;
-	esac
+    select yesno in "yes" "all" "no"; do
+	    case $yesno in
+          yes ) rm -fr flock-*.agr flock-*.delta $seed.cell.* $seed-*.* training validation testing good_castep hopper bad_castep list.franks sed* STOP jobscript_*.sh DONE_* ; ./despawn-batch 2> /dev/null ; ./defarm-batch 2 >/dev/null ;  rm -fr  despawn-batch defarm-batch; exit 0;;
+          all ) rm -fr flock-*.agr flock-*.delta $seed.cell.* $seed-*.* training validation testing good_castep hopper bad_castep list.franks sed* STOP jobscript_*.sh DONE_* $seed $seed.eddp data.res; ./despawn-batch 2> /dev/null ; ./defarm-batch 2 >/dev/null ;  rm -fr  despawn-batch defarm-batch; exit 0;;
+          no ) exit 1;;
+	    esac
     done
     
 fi
@@ -186,7 +202,7 @@ echo '      \_______|\__|  \__| \_______|\__|\__|  \__|      '
 echo '                                                       '
 echo '    automated generation of data derived potentials    '
 echo '                                                       '
-echo '       author: Chris J. Pickard, Cambridge 2021        '
+echo '       author: Chris J. Pickard, Cambridge 2023        '
 echo '                                                       '
 echo '    summary of parameters - '
 echo
@@ -202,6 +218,9 @@ echo "      deviation: "$deviation
 echo "      jiggles:   "$jiggles
 echo "      Jiggles:   "$Jiggles
 echo "      amp:       "$amp" Ang"
+echo "      temp:      "$temp" K"
+echo "      step:      "$step" fs"
+echo "      time:      "$time" ps"
 echo "      npoly:     "$npoly
 echo "      lowexp:    "$lowexp
 echo "      highexp:   "$highexp
@@ -227,10 +246,10 @@ function fullrand {
     
     until [[ $counter -ge $full ]]
     do
-	sleep 1
-	test -f "./STOP" && echo -e '\nstopping chain ..' && ./despawn-batch && exit 0
-	counter=`ls $seed-*.res 2> /dev/null | wc -l`
-	echo -n -e "\r\033[0K"$counter" structures"
+	    sleep 1
+	    test -f "./STOP" && echo -e '\nstopping chain ..' && ./despawn-batch && exit 0
+	    counter=`ls $seed-*.res 2> /dev/null | wc -l`
+	    echo -n -e "\r\033[0K"$counter" structures"
     done
     
     echo
@@ -279,10 +298,10 @@ function markandjiggle {
     
     until [[ $counter -eq 0 ]]
     do
-	sleep 1
-	test -f "./STOP" && echo -e '\nstopping chain ..' && ./despawn-batch && exit 0
-	counter=`ls $seed-*.res ./hopper/$seed-*.res 2> /dev/null | wc -l`
-	echo -n -e "\r\033[0K"$counter" remaining"
+	    sleep 1
+	    test -f "./STOP" && echo -e '\nstopping chain ..' && ./despawn-batch && exit 0
+	    counter=`ls $seed-*.res ./hopper/$seed-*.res 2> /dev/null | wc -l`
+	    echo -n -e "\r\033[0K"$counter" remaining"
     done
     
     sleep 1
@@ -310,19 +329,19 @@ function relaxandjiggle {
 
     if [[ ${prand} == true ]]
     then
-	spawn-batch -bakres cp -command airss.pl -max $minima -keep -mpinp $mpinp -press $pressure -pmin $lowpress -prand -repose -nbest $nbest -devmin $deviation -seed $seed &
+	    spawn-batch -bakres cp -command airss.pl -max $minima -keep -mpinp $mpinp -press $pressure -pmin $lowpress -prand -repose -nbest $nbest -devmin $deviation -seed $seed &
     else
-	spawn-batch -bakres cp -command airss.pl -max $minima -keep -mpinp $mpinp -press $pressure -repose -nbest $nbest -devmin $deviation -seed $seed &
+	    spawn-batch -bakres cp -command airss.pl -max $minima -keep -mpinp $mpinp -press $pressure -repose -nbest $nbest -devmin $deviation -seed $seed &
     fi
 
     counter=0
 
     until [[ $counter -ge $minima ]]
     do
-	sleep 1
-	test -f "./STOP" && echo -e '\nstopping chain ..' && ./despawn-batch && exit 0
-	counter=`ls $seed-*.res 2> /dev/null | wc -l`
-	echo -n -e "\r\033[0K"$counter" structures"
+	    sleep 1
+	    test -f "./STOP" && echo -e '\nstopping chain ..' && ./despawn-batch && exit 0
+	    counter=`ls $seed-*.res 2> /dev/null | wc -l`
+	    echo -n -e "\r\033[0K"$counter" structures"
     done
 
     echo
@@ -350,6 +369,48 @@ function relaxandjiggle {
     
     rm $seed-*.*
     
+    if [[ ${temp} != 'none' ]]
+    then
+    
+       echo 'thermalising structures ...'
+    
+       echo '-ts '$step' -dr 0.5 -qt '$time' 10 -tt '$temp > $seed.par
+    
+       echo 'launching crud ramble ...'
+    
+       spawn-batch -bakres cp -command crud.pl -ramble -mpinp $mpinp &
+    
+       sleep 1
+    
+       counter=1
+    
+       until [[ $counter -eq 0 ]]
+       do
+          sleep 1
+   	    test -f "./STOP" && echo -e '\nstopping chain ..' && ./despawn-batch && exit 0
+   	    counter=`ls $seed-*.res ./hopper/$seed-*.res 2> /dev/null | wc -l`
+   	    echo -n -e "\r\033[0K"$counter" remaining"
+       done
+    
+       sleep 1
+    
+       echo
+       echo 'stopping crud ramble ...'
+    
+       ./despawn-batch
+    
+       sleep 5
+    
+       echo 'moving structures ...'
+    
+       mv ./good_castep/$seed-*.res ./hopper
+    
+       test -d "./bad_castep" && mv ./bad_castep/$seed-*.res ./hopper ## WORK ON THIS - NEED THE STRUCTURE THAT FAILED
+       
+       rm -fr bad_castep good_castep
+       
+    fi
+    
     echo 'launching crud ...'
     
     spawn-batch -bakres cp -command crud.pl -mpinp $mpinp &
@@ -360,10 +421,10 @@ function relaxandjiggle {
     
     until [[ $counter -eq 0 ]]
     do
-	sleep 1
-	test -f "./STOP" && echo -e '\nstopping chain ..' && ./despawn-batch && exit 0
-	counter=`ls $seed-*.res ./hopper/$seed-*.res 2> /dev/null | wc -l`
-	echo -n -e "\r\033[0K"$counter" remaining"
+	    sleep 1
+	    test -f "./STOP" && echo -e '\nstopping chain ..' && ./despawn-batch && exit 0
+	    counter=`ls $seed-*.res ./hopper/$seed-*.res 2> /dev/null | wc -l`
+	    echo -n -e "\r\033[0K"$counter" remaining"
     done
     
     sleep 1
@@ -395,9 +456,9 @@ function genpot {
 
     if [[ ${prand} == true ]]
     then
-	meanpress=`echo "($pressure+$lowpress)/2" | bc -l`
+	    meanpress=`echo "($pressure+$lowpress)/2" | bc -l`
     else
-	meanpress=$pressure
+	    meanpress=$pressure
     fi
 
     echo 'constructing features ...'
@@ -422,9 +483,9 @@ function genpot {
     
     if [[ $nnodes -gt 0 ]]
     then
-	farm-batch -bakres cp -command forge -ompnp $ompnp -es 10 -n 200 -nn $nnodes -np -q -numpot $minpot -s ./$seed/$seed &
+	    farm-batch -bakres cp -command forge -ompnp $ompnp -es 10 -n 200 -nn $nnodes -np -q -numpot $minpot -s ./$seed/$seed &
     else
-	farm-batch -bakres cp -command forge -ompnp $ompnp -es 10 -n 200 -np -q -numpot $minpot -s ./$seed/$seed &
+	    farm-batch -bakres cp -command forge -ompnp $ompnp -es 10 -n 200 -np -q -numpot $minpot -s ./$seed/$seed &
     fi
     
     counter=0
@@ -437,11 +498,11 @@ function genpot {
 
     until [[ $counter -ge $minpot ]]
     do
-	sleep 10
-	test -f "./STOP" && echo -e '\nstopping chain ..' && ./defarm-batch && exit 0
-	#counter=`grep "testing:   testing" $seed/*.out | wc -l`
+	    sleep 10
+	    test -f "./STOP" && echo -e '\nstopping chain ..' && ./defarm-batch && exit 0
+       #counter=`grep "testing:   testing" $seed/*.out | wc -l`
     counter=`ls $seed/*.ddp 2> /dev/null | wc -l`
-	echo -n -e "\r\033[0K"$counter" potentials"
+       echo -n -e "\r\033[0K"$counter" potentials"
     done
 
     sleep 10
@@ -467,7 +528,7 @@ function genpot {
 
     if [[ $num_local_cores -lt 1 ]]
     then
-	let num_local_cores=1
+	    let num_local_cores=1
     fi
     
     ls $seed/$seed*.ddp | flock -ompnp $num_local_cores -p $meanpress -v -q > $seed.eddp

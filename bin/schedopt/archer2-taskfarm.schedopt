@@ -11,6 +11,7 @@
 #SBATCH --qos=taskfarm
 
 ncores_per_node=128             # number of cores to be used / for underpopulation of nodes, you can specify fewer processes than cores on compute nodes
+nnodes_per_subjob=1
 mem_per_core=1500               # memory per core in M
 %endblock default
 
@@ -27,6 +28,7 @@ mem_per_core=1500               # memory per core in M
 #SBATCH --qos=taskfarm
 
 ncores_per_node=128
+nnodes_per_subjob=8
 mem_per_core=1500
 %endblock airss
 
@@ -43,6 +45,7 @@ mem_per_core=1500
 #SBATCH --qos=taskfarm
 
 ncores_per_node=128
+nnodes_per_subjob=8
 mem_per_core=1500
 %endblock crud
 
@@ -59,5 +62,6 @@ mem_per_core=1500
 #SBATCH --qos=short
 
 ncores_per_node=128
+nnodes_per_subjob=1
 mem_per_core=1500
 %endblock forge
