@@ -58,6 +58,9 @@ while [ $# -ge 1 ] ; do
                     -mpinp)
                         mpinp=$2; shift 2 # airss | crud
                         ;;
+                    -ompnp)
+                        mpinp=$2; shift 2 # forge
+                        ;;
                     -repose)
                         exe='repose'; shift 1 # airss | crud
                         ;;
