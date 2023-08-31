@@ -749,21 +749,35 @@ function monjob {
 
         elif [[ $program == 'crud' ]]
         then
+            # for failure due to bad castep
             if [[ -d bad_castep ]]
             then
                 rm -f bad_castep/*.{cell,param,castep}
                 find . ./bad_castep -maxdepth 1 -type f -name "*.res" | sed '/data.res/d' | xargs mv -t ./hopper
             fi
+            # for the incomplete calculation stopped during running
             if ls *.castep &>/dev/null
             then
                 for castepfile in `ls *.castep`
                 do
-                    seedcrud=${castepfile%%.res}
+                    seedcrud=${castepfile%%.castep}
                     echo $seedcrud
                     castep2res $seedcrud > hopper/$seedcrud.res
                     rm -f $seedcrud.{cell,param,castep,res}
                 done
             fi
+            # for the incomplete calculation stopped at the beginning of the calculation
+            for f in $(ls $seed-*.cell)
+            do
+                seedcrud=${f%%.cell}
+                if [[ -f $seedcrud.res ]]; then
+                    mv $seedcrud.res ./hopper
+                else
+                    cabal cell res < $seedcrud.cell > ./hopper/$seedcrud.res
+                fi
+                rm -f $seedcrud.{cell,param,castep,res}
+            done
+
         fi
 
         echo '    resubmit the job'
