@@ -6,10 +6,12 @@ seed='Li'
 
 cp michael.schedopt.example test.schedopt
 
+opts="-command airss.pl -mpinp 4 -step 0 -seed $seed -max 600 -build"
+
 # test 1
-#nohup spawn-batch -despawn -command airss.pl -mpinp 4 -step 0 -seed $seed -max 600 -build &
+#nohup spawn-batch -despawn ${opts} &
 
 # test 2
-nohup spawn-batch -bakres mv -despawn -command airss.pl -mpinp 4 -step 0 -seed $seed -max 600 -build &
+nohup spawn-batch-test -bakres mv -despawn ${opts} &
 
 exit 0

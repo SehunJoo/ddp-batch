@@ -1,67 +1,76 @@
 %block default
 #$ -N default
-#$ -ac allow=A
-#$ -pe mpi 40
-#$ -t 1-16
+#$ -ac allow=K
+#$ -pe mpi 48
+#$ -t 1-1
 #$ -l mem=4G
-#$ -l h_rt=48:00:00
+#$ -l h_rt=02:00:00
 #$ -A Faraday_FCAT
 #$ -P Gold
 #$ -cwd
 #$ -S /bin/bash
 #$ -m n
 
-ncores_per_node=40      # number of cores to be used / for underpopulation of nodes, you can spcify fewer processes than cores on compute nodes
-mem_per_core=4096       # memory per core in M
+
+ncores_per_node=24    # number of cores of a node
+nnodes_per_subjob=1
+ncores_per_subjob=4
+mem_per_core=4096     # memory per core in M
 %endblock default
 
 %block airss
 #$ -N airss
-#$ -ac allow=A
-#$ -pe mpi 40
-#$ -t 1-16
+#$ -ac allow=K
+#$ -pe mpi 48
+#$ -t 1-1
 #$ -l mem=4G
-#$ -l h_rt=48:00:00
+#$ -l h_rt=02:00:00
 #$ -A Faraday_FCAT
 #$ -P Gold
 #$ -cwd
 #$ -S /bin/bash
 #$ -m n
 
-ncores_per_node=40      # number of cores to be used / for underpopulation of nodes, you can spcify fewer processes than cores on compute nodes
-mem_per_core=4096       # memory per core in M
+ncores_per_node=24
+nnodes_per_subjob=1
+ncores_per_subjob=4
+mem_per_core=4096
 %endblock airss
 
 %block crud
 #$ -N crud
-#$ -ac allow=A
-#$ -pe mpi 40
-#$ -t 1-16
+#$ -ac allow=K
+#$ -pe mpi 48
+#$ -t 1-1
 #$ -l mem=4G
-#$ -l h_rt=48:00:00
+#$ -l h_rt=02:00:00
 #$ -A Faraday_FCAT
 #$ -P Gold
 #$ -cwd
 #$ -S /bin/bash
 #$ -m n
 
-ncores_per_node=40      # number of cores to be used / for underpopulation of nodes, you can spcify fewer processes than cores on compute nodes
-mem_per_core=4096       # memory per core in M
+ncores_per_node=24
+nnodes_per_subjob=2
+ncores_per_subjob=48
+mem_per_core=4096
 %endblock crud
 
 %block forge
 #$ -N forge
-#$ -ac allow=A
-#$ -pe mpi 40
-#$ -t 1-16
+#$ -ac allow=K
+#$ -pe mpi 48
+#$ -t 1-1
 #$ -l mem=4G
-#$ -l h_rt=48:00:00
+#$ -l h_rt=02:00:00
 #$ -A Faraday_FCAT
 #$ -P Gold
 #$ -cwd
 #$ -S /bin/bash
 #$ -m n
 
-ncores_per_node=40      # number of cores to be used / for underpopulation of nodes, you can spcify fewer processes than cores on compute nodes
-mem_per_core=4096       # memory per core in M
+ncores_per_node=24
+nnodes_per_subjob=1
+ncores_per_subjob=4
+mem_per_core=4096
 %endblock forge

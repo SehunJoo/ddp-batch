@@ -12,6 +12,6 @@ cp michael.schedopt.example test.schedopt
 #nohup spawn-batch -despawn -command crud.pl -mpinp 4 &
 
 # test 2
-nohup spawn-batch -bakres mv -despawn -command crud.pl -mpinp 4 &
+nohup spawn-batch-test -bakres mv -despawn -command crud.pl -mpinp 48 &
 
 exit 0
