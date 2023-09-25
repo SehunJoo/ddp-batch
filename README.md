@@ -9,7 +9,7 @@ run setup.sh script:
 
 `./setup.sh`
 
-## Decumentation
+## Documentation
 
 ### update-chain
 
