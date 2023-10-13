@@ -4,7 +4,9 @@
 
 seed='Li'
 
-cp michael.schedopt.example test.schedopt
+rm -rf *.schedopt
+cp $DDPBATCH/schedopt/michael-A.schedopt .
+#cp $DDPBATCH/schedopt/michael-K.schedopt .
 
 # test 1
 #nohup spawn-batch -despawn -command airss.pl -mpinp 4 -step 0 -seed $seed -max 600 &
