@@ -11,9 +11,9 @@
 #$ -S /bin/bash
 #$ -m n
 
-ncores_per_node=24    # number of cores of a node
-nnodes_per_subjob=3
-ncores_per_subjob=72
+ncores_per_node=24    # total number of cores on a node (machine-dependent)
+nnodes_per_subjob=3   # total number of nodes you want to allocate to a single subjob
+ncores_per_subjob=72  # total number of cores you want to allocate to a single subjob
 mem_per_core=4096     # memory per core in M
 %endblock default
 
