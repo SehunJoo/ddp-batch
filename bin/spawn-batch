@@ -414,7 +414,7 @@ function genjob {
 
         elif [[ $program == 'forge' ]]
         then
-            echo '        ${cmdline}.${jids}.${i}  < /dev/null \'
+            echo '        ${cmdline}.${jids}.${nodeid}.${i}  < /dev/null \'
             echo '                                 > ${seed}/${seed}.${jids}.${nodeid}.${i}.out \'
             echo '                                2> ${seed}/${seed}.${jids}.${nodeid}.${i}.err &'
 
