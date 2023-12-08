@@ -176,13 +176,16 @@ fi
 
 
 # get information about computational resources securing for each subjob (underpopulation of node or multi-node)
+# determine how much resources we use for each subjob
 
 nnodes_per_subjob=$(echo "$nonschedopt" | grep 'nnodes_per_subjob' | awk 'BEGIN {FS="="} {print $2}' | awk '{print $1}')
 [[ -z $nnodes_per_subjob ]] && nnodes_per_subjob=1
 ncores_per_subjob=$(echo "$nonschedopt" | grep 'ncores_per_subjob' | awk 'BEGIN {FS="="} {print $2}' | awk '{print $1}')
 [[ -z $ncores_per_subjob ]] && ncores_per_subjob=$sched_ncores_per_node
-ncores_per_node_per_subjob=$(( ($ncores_per_subjob + $nnodes_per_subjob - 1) / $nnodes_per_subjob ))
-#nnodes_per_subjob=$(( ($ncores_per_subjob + $sched_ncores_per_node - 1) / $sched_ncores_per_node ))
+
+# variables for multi-node subjob (nnodes_per_subjob > 1)
+ncores_per_subjob_per_node=$(( ($ncores_per_subjob + $nnodes_per_subjob - 1) / $nnodes_per_subjob ))
+mpinp_per_node=$(( ($mpinp + $nnodes_per_subjob - 1) / $nnodes_per_subjob )) # for underpopulation
 
 if [[ $nnodes_per_subjob -gt $sched_nnodes_per_job ]]; then
     echo "# nodes (/job)    : $sched_nnodes_per_job"
@@ -191,8 +194,8 @@ if [[ $nnodes_per_subjob -gt $sched_nnodes_per_job ]]; then
     exit 127
 fi
 
-if [[ $ncores_per_node_per_subjob -gt $sched_ncores_per_node ]]; then
-    echo "# cores (/node/subjob) : $ncores_per_node_per_subjob"
+if [[ $ncores_per_subjob_per_node -gt $sched_ncores_per_node ]]; then
+    echo "# cores (/node/subjob) : $ncores_per_subjob_per_node"
     echo "this should be equal or less than $sched_ncores_per_node"
     exit 127
 fi
@@ -207,6 +210,7 @@ fi
 
 
 # number of subjobs
+# determine how we distribute subjobs over the nodes
 
 if [[ $nnodes_per_subjob -eq 1 ]]; then
 
@@ -236,7 +240,7 @@ if [[ $verbose = "true" ]]; then
     echo
     echo "number of nodes   : ${nnodes_per_subjob} /subjob"
     echo "number of cores   : ${ncores_per_subjob} /subjob"
-    echo "number of cores   : ${ncores_per_node_per_subjob} out of ${sched_ncores_per_node} /node/subjob"
+    echo "number of cores   : ${ncores_per_subjob_per_node} out of ${sched_ncores_per_node} /node/subjob"
     echo
     echo "number of subjobs : $nsubjobs_per_node /node"
     echo "number of subjobs : $nsubjobs_per_job /job"
@@ -244,6 +248,7 @@ if [[ $verbose = "true" ]]; then
     echo
     if [[ $mpinp -lt $ncores_per_subjob ]]; then
         echo "underpopulating nodes ..."
+        echo "number of cores : 
         echo "mpinp : $mpinp"
         echo "# cores : $ncores_per_subjob / subjob"
     fi
@@ -404,7 +409,7 @@ function genjob {
             elif [[ $exe == 'castep' ]] && [[ $sched == 'slurm' ]]
             then
                 echo "        ${cmdline}"' \'
-                echo '            -launch "srun --nodelist=${nodeid} --exact --nodes='"${nnodes_per_subjob}"' --cpus-per-task=1 --mem='"${mem_per_subjob}"'M  --tasks-per-node='"${mpinp}"'  --ntasks=" \'
+                echo '            -launch "srun --nodelist=${nodeid} --exact --nodes='"${nnodes_per_subjob}"' --cpus-per-task=1 --mem='"${mem_per_subjob}"'M  --tasks-per-node='"${mpinp_per_node}"'  --ntasks=" \'
                 echo "            -exec 'castep.mpi' &"
 
             elif [[ $exe == 'repose' ]]
