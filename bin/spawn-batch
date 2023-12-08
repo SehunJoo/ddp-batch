@@ -248,8 +248,8 @@ if [[ $verbose = "true" ]]; then
     echo
     if [[ $mpinp -lt $ncores_per_subjob ]]; then
         echo "underpopulating nodes ..."
-        echo "mpinp : $mpinp"
-        echo "# cores : $ncores_per_subjob / subjob"
+        echo "mpinp : $mpinp_per_node /node"
+        echo "# cores : $ncores_per_subjob_per_node /subjob/node"
     fi
 fi
 
