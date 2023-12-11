@@ -232,7 +232,7 @@ fi
 # memory per subjob
 
 mem_per_core=$(echo "$nonschedopt" | grep 'mem_per_core' | awk 'BEGIN {FS="="} {print $2}' | awk '{print $1}')
-mem_per_subjob=$(( $mem_per_core * $mpinp ))
+mem_per_subjob=$(( $mem_per_core * $ncores_per_subjob_per_node ))
 
 if [[ $verbose = "true" ]]; then
     echo
@@ -408,7 +408,7 @@ function genjob {
             elif [[ $exe == 'castep' ]] && [[ $sched == 'slurm' ]]
             then
                 echo "        ${cmdline}"' \'
-                echo '            -launch "srun --nodelist=${nodeid} --exact --nodes='"${nnodes_per_subjob}"' --cpus-per-task=1 --mem='"${mem_per_subjob}"'M  --tasks-per-node='"${mpinp_per_node}"'  --ntasks=" \'
+                echo '            -launch "srun --nodelist=${nodeid} --exact --nodes='"${nnodes_per_subjob}"' --cpus-per-task=1 --mem='"${mem_per_subjob}"'M  --ntasks-per-node='"${mpinp_per_node}"'  --ntasks=" \'
                 echo "            -exec 'castep.mpi' &"
 
             elif [[ $exe == 'repose' ]]
