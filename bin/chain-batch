@@ -3,9 +3,10 @@
 set -e
 
 function usage {
-    echo "usage: $(basename $0) [-c] [-n ncycles] [-p pressure] [-l lowpress] [-R] [-r rcut] [-f full] [-m minima] [-b nbest] [-d deviation] [-j jiggles] [-J Jiggles] [-a amp] [-T temp] [-S step] [-t time] [-P npoly] [-L lowexp] [-H highexp] [-B nbody] [-N nnodes] [-E deltae] [-M mpinp] [-O ompnp] [-F minpot] [-e] [-s seed]" 2>&1
+    echo "usage: $(basename $0) [-c] [-D ndata] [-n ncycles] [-p pressure] [-l lowpress] [-R] [-r rcut] [-f full] [-m minima] [-b nbest] [-d deviation] [-w waitseconds] [-j jiggles] [-J Jiggles] [-a amp] [-T temp] [-S step] [-t time] [-P npoly] [-L lowexp] [-H highexp] [-B nbody] [-N nnodes] [-E deltae] [-C compress] [-M mpinp] [-O ompnp] [-F minpot] [-A] [-x natexp] [-k] [-e] [-s seed]" 2>&1
     echo '  iteratively generate a data derived potential'
     echo '   -c             clean up (deletes files)'
+    echo '   -D ndata       truncate dataset'
     echo '   -n ncycles     number of cycles'
     echo '   -p pressure    target pressure (high)'
     echo '   -l lowpress    target pressure (low)'
@@ -14,7 +15,8 @@ function usage {
     echo '   -f full        number of fully random structures'
     echo '   -m minima      number of local minima each cycle'
     echo '   -b nbest       best of nbest minima retained'    
-    echo '   -d deviation   deviation bias'    
+    echo '   -d deviation   deviation bias' 
+	 echo '   -w waitseconds how long to wait for minima before reducing deviation bias'   
     echo '   -j jiggles     number of jiggles of local minima'
     echo '   -J Jiggles     number of jiggles of marker structures'
     echo '   -a amp         amplitude for jiggling'
@@ -27,10 +29,14 @@ function usage {
     echo '   -B nbody       highest body order'
     echo '   -N nnodes      number of nodes in hidden layer'
     echo '   -E deltae      energy window'
+    echo '   -C compress    compress input by factor [1]'
     echo '   -M mpinp       number of remote MPI cores'
     echo '   -O ompnp       number of remote OMP cores'
     echo '   -F minpot      approximate floor for the number of potentials'
-    echo '   -e email       send email to address when completed'
+    echo '   -A             mean features - no active learning'
+    echo '   -x             energy normalisation natom exponent (default 0.5)'
+    echo '   -k             keep intermediate files'
+    echo '   -e             send email to address when completed'
     echo '   -s seed        seedname'
     exit 1
 }
@@ -38,6 +44,7 @@ function usage {
 # set defaults
 
 clean='false'
+ndata=0
 ncycles=5
 pressure=0.001 # Small positive pressure to disfavour expanded cells
 lowpress=0.0
@@ -47,6 +54,7 @@ full=1000
 minima=100
 nbest=1
 deviation=0.0
+waitseconds=600
 jiggles=10
 Jiggles=100
 amp=0.02
@@ -59,18 +67,30 @@ highexp=10
 nbody=3
 nnodes=5
 deltae=10.0
+compress=1.0
 mpinp=4
 ompnp=4
 minpot=0
+average='false'
+natexp=0.5
+keep='false'
 email='false'
 seed='seed'
 
-optstring=":cs:n:p:l:Rr:f:m:b:d:j:J:a:T:S:t:P:L:H:B:N:E:M:O:F:eh"
+if [[ -f data.res ]]; then # If data exists, but default no active learning
+   full=0
+   ncycles=0
+fi
+
+optstring=":cs:D:n:p:l:Rr:f:m:b:d:w:j:J:a:T:S:t:P:L:H:B:N:E:C:M:O:F:Ax:keh"
 
 while getopts ${optstring} arg; do
     case ${arg} in
 	c)
 	    clean="true"
+	    ;;
+	D)
+	    ndata="${OPTARG}"
 	    ;;
 	n)
 	    ncycles="${OPTARG}"
@@ -98,6 +118,9 @@ while getopts ${optstring} arg; do
 	    ;;
 	d)
 	    deviation="${OPTARG}"
+	    ;;
+	w)
+	    waitseconds="${OPTARG}"
 	    ;;
 	j)
 	    jiggles="${OPTARG}"
@@ -135,6 +158,9 @@ while getopts ${optstring} arg; do
 	E)
 	    deltae="${OPTARG}"
 	    ;;
+	C)
+	    compress="${OPTARG}"
+	    ;;
 	M)
 	    mpinp="${OPTARG}"
 	    ;;
@@ -147,6 +173,15 @@ while getopts ${optstring} arg; do
 	s)
 	    seed="${OPTARG}"
 	    ;;
+  	A)
+  	    average="true"
+  	    ;;
+  	x)
+  	    natexp="${OPTARG}"
+  	    ;;
+ 	k)
+ 	    keep="true"
+ 	    ;;
 	e)
 	    email="true"
 	    ;;
@@ -168,17 +203,17 @@ done
 [[ ! -f $seed.cell ]] && ( echo $seed'.cell not found' ; exit 1 )
 
 if ls .spawnpids* &>/dev/null; then
-    echo 'spawn files detected - aborting ...'
+    echo '    spawn files detected - aborting ...'
     exit 1
 fi
 
 if ls .farmpids* &>/dev/null; then
-    echo 'farm files detected - aborting ...'
+    echo '    farm files detected - aborting ...'
     exit 1
 fi
 
 if [[ ${clean} == true ]];then
-    echo 'cleaning up. files will be deleted, do you wish to proceed?'
+    echo '    cleaning up. files will be deleted, do you wish to proceed?'
 
     select yesno in "yes" "all" "no"; do
 	    case $yesno in
@@ -190,55 +225,69 @@ if [[ ${clean} == true ]];then
     
 fi
 
-echo '                                                       '
-echo '               $$\                 $$\                 '
-echo '               $$ |                \__|                '
-echo '      $$$$$$$\ $$$$$$$\   $$$$$$\  $$\ $$$$$$$\        '
-echo '     $$  _____|$$  __$$\  \____$$\ $$ |$$  __$$\       '
-echo '     $$ /      $$ |  $$ | $$$$$$$ |$$ |$$ |  $$ |      '
-echo '     $$ |      $$ |  $$ |$$  __$$ |$$ |$$ |  $$ |      '
-echo '     \$$$$$$$\ $$ |  $$ |\$$$$$$$ |$$ |$$ |  $$ |      '
-echo '      \_______|\__|  \__| \_______|\__|\__|  \__|      '
-echo '                                                       '
-echo '    automated generation of data derived potentials    '
-echo '                                                       '
-echo '       author: Chris J. Pickard, Cambridge 2023        '
-echo '                                                       '
-echo '    summary of parameters - '
-echo
-echo "      ncycles:   "$ncycles
-echo "      pressure:  "$pressure" GPa"
-echo "      lowpress:  "$lowpress" GPa"
-echo "      prand:     "$prand
-echo "      rcut:      "$rcut" Ang"
-echo "      full:      "$full
-echo "      minima:    "$minima
-echo "      nbest:     "$nbest
-echo "      deviation: "$deviation
-echo "      jiggles:   "$jiggles
-echo "      Jiggles:   "$Jiggles
-echo "      amp:       "$amp" Ang"
-echo "      temp:      "$temp" K"
-echo "      step:      "$step" fs"
-echo "      time:      "$time" ps"
-echo "      npoly:     "$npoly
-echo "      lowexp:    "$lowexp
-echo "      highexp:   "$highexp
-echo "      nbody:     "$nbody
-echo "      nnodes:    "$nnodes
-echo "      deltae:    "$deltae
-echo "      mpinp:     "$mpinp
-echo "      ompnp:     "$ompnp
-echo "      minpot:    "$minpot
-echo "      email:     "$email
-echo "      seed:      "$seed
-echo
+## output banner and summarise parameters
+
+function banner {
+
+	echo '                                                       '
+	echo '               $$\                 $$\                 '
+	echo '               $$ |                \__|                '
+	echo '      $$$$$$$\ $$$$$$$\   $$$$$$\  $$\ $$$$$$$\        '
+	echo '     $$  _____|$$  __$$\  \____$$\ $$ |$$  __$$\       '
+	echo '     $$ /      $$ |  $$ | $$$$$$$ |$$ |$$ |  $$ |      '
+	echo '     $$ |      $$ |  $$ |$$  __$$ |$$ |$$ |  $$ |      '
+	echo '     \$$$$$$$\ $$ |  $$ |\$$$$$$$ |$$ |$$ |  $$ |      '
+	echo '      \_______|\__|  \__| \_______|\__|\__|  \__|      '
+	echo '                                                       '
+	echo '    automated generation of data derived potentials    '
+	echo '                                                       '
+	echo '       author: Chris J. Pickard, Cambridge 2023        '
+	echo '                                                       '
+	echo '    summary of parameters - '
+	echo
+	echo "      ndata:       "$ndata
+	echo "      ncycles:     "$ncycles
+	echo "      pressure:    "$pressure" GPa"
+	echo "      lowpress:    "$lowpress" GPa"
+	echo "      prand:       "$prand
+	echo "      rcut:        "$rcut" Ang"
+	echo "      full:        "$full
+	echo "      minima:      "$minima
+	echo "      nbest:       "$nbest
+	echo "      deviation:   "$deviation
+	echo "      waitseconds: "$waitseconds
+	echo "      jiggles:     "$jiggles
+	echo "      Jiggles:     "$Jiggles
+	echo "      amp:         "$amp" Ang"
+	echo "      temp:        "$temp" K"
+	echo "      step:        "$step" fs"
+	echo "      time:        "$time" ps"
+	echo "      npoly:       "$npoly
+	echo "      lowexp:      "$lowexp
+	echo "      highexp:     "$highexp
+	echo "      nbody:       "$nbody
+	echo "      nnodes:      "$nnodes
+	echo "      deltae:      "$deltae
+	echo "      compress:    "$compress
+	echo "      mpinp:       "$mpinp
+	echo "      ompnp:       "$ompnp
+	echo "      minpot:      "$minpot
+	echo "      average:     "$average
+	echo "      natexp:      "$natexp
+	echo "      keep:        "$keep
+	echo "      email:       "$email
+	echo "      seed:        "$seed
+	echo
+	echo "      job starting: "$seed" "`date`
+	echo
+
+}
 
 ## generate data through full randomisation, and no relaxation
 
 function fullrand {
     
-    echo 'launching airss ...'
+    echo '    launching airss ...'
     
     spawn-batch  -command airss.pl -max $full -mpinp $mpinp -step 0 -seed $seed &
     
@@ -249,17 +298,17 @@ function fullrand {
 	    sleep 1
 	    test -f "./STOP" && echo -e '\nstopping chain ..' && ./despawn-batch && exit 0
 	    counter=`ls $seed-*.res 2> /dev/null | wc -l`
-	    echo -n -e "\r\033[0K"$counter" structures"
+	    echo -n -e "\r\033[0K    "$counter" structures"
     done
     
     echo
-    echo 'stopping airss ...'
+    echo '    stopping airss ...'
     
     ./despawn-batch
     
     sleep 5
     
-    echo 'storing structures ...'
+    echo '    storing structures ...'
     
     find . -name "$seed-*.res" -empty -type f -delete
     grep -L TITL $seed-*.res | xargs rm -f
@@ -275,7 +324,7 @@ function fullrand {
 
 function markandjiggle {
     
-    echo 'shaking marker structures ...'
+    echo '    shaking marker structures ...'
     
     find ./marks -name "$seed-*.res" -empty -type f -delete
     
@@ -288,7 +337,7 @@ function markandjiggle {
     
     mv ./marks/shook hopper
         
-    echo 'launching crud ...'
+    echo '    launching crud ...'
     
     spawn-batch  -command crud.pl -mpinp $mpinp &
     
@@ -301,19 +350,19 @@ function markandjiggle {
 	    sleep 1
 	    test -f "./STOP" && echo -e '\nstopping chain ..' && ./despawn-batch && exit 0
 	    counter=`ls $seed-*.res ./hopper/$seed-*.res 2> /dev/null | wc -l`
-	    echo -n -e "\r\033[0K"$counter" remaining"
+	    echo -n -e "\r\033[0K    "$counter" remaining"
     done
     
     sleep 1
     
     echo
-    echo 'stopping crud ...'
+    echo '    stopping crud ...'
     
     ./despawn-batch
     
     sleep 5
     
-    echo 'storing structures ...'
+    echo '    storing structures ...'
     
     cat ./good_castep/$seed-*.res >> data.res
     
@@ -325,7 +374,7 @@ function markandjiggle {
 
 function relaxandjiggle {
 
-    echo 'launching airss ...'
+    echo '    launching airss ...'
 
     if [[ ${prand} == true ]]
     then
@@ -336,47 +385,65 @@ function relaxandjiggle {
 
     counter=0
 
-    until [[ $counter -ge $minima ]]
+	SECONDS=0
+
+    until [[ $counter -ge $minima || $SECONDS -ge $waitseconds ]]
     do
 	    sleep 1
 	    test -f "./STOP" && echo -e '\nstopping chain ..' && ./despawn-batch && exit 0
 	    counter=`ls $seed-*.res 2> /dev/null | wc -l`
-	    echo -n -e "\r\033[0K"$counter" structures"
+	    echo -n -e "\r\033[0K    "$counter" structures"
     done
-
     echo
-    echo 'stopping airss ...'
+
+	if [[ $counter -lt $minima ]]; then 
+		deviation=`echo "scale=3;"$deviation"/2.000" | bc -l` 
+		echo '    deviation bias reduced to: '$deviation
+	else
+		deviation=`echo "scale=3;"$deviation"*1.618" | bc -l` 
+		echo '    deviation bias increased to: '$deviation
+	fi
+
+    echo '    stopping airss ...'
     
     ./despawn-batch
     
     sleep 5
     
-    echo 'shaking structures ...'
+    echo '    shaking structures ...'
     
-    find . -name "$seed-*.res" -empty -type f -delete
-    grep -L TITL $seed-*.res | xargs rm -f
-    grep -L END $seed-*.res | xargs rm -f
+	if [[ $counter -gt 0 ]]; then
+	
+		find . -name "$seed-*.res" -empty -type f -delete
+    	grep -L TITL $seed-*.res | xargs rm -f
+    	grep -L END $seed-*.res | xargs rm -f
 
-    let minum=$minima
+    	let minum=$minima
     
-    ls $seed-*.res | shuf | head -n -$minum | xargs -r rm
+    	ls $seed-*.res | shuf | head -n -$minum | xargs -r rm
     
-    reshake $amp $amp 0 $jiggles $seed 2> /dev/null
+    	reshake $amp $amp 0 $jiggles $seed 2> /dev/null
     
-    sleep 1
+    	sleep 1
     
-    mv shook hopper
+    	mv shook hopper
     
-    rm $seed-*.*
+    	rm $seed-*.*
+		
+	else
+		
+		mkdir -p hopper
+	
+	fi
     
     if [[ ${temp} != 'none' ]]
     then
     
-       echo 'thermalising structures ...'
+       echo '    thermalising structures ...'
     
        echo '-ts '$step' -dr 0.5 -qt '$time' 10 -tt '$temp > $seed.par
     
-       echo 'launching crud ramble ...'
+       echo '    launching crud ramble ...'
     
        spawn-batch  -command crud.pl -ramble -mpinp $mpinp &
     
@@ -389,21 +456,21 @@ function relaxandjiggle {
           sleep 1
    	    test -f "./STOP" && echo -e '\nstopping chain ..' && ./despawn-batch && exit 0
    	    counter=`ls $seed-*.res ./hopper/$seed-*.res 2> /dev/null | wc -l`
-   	    echo -n -e "\r\033[0K"$counter" remaining"
+   	    echo -n -e "\r\033[0K    "$counter" remaining"
        done
     
        sleep 1
     
        echo
-       echo 'stopping crud ramble ...'
+       echo '    stopping crud ramble ...'
     
        ./despawn-batch
     
        sleep 5
     
-       echo 'moving structures ...'
+       echo '    moving structures ...'
     
-       mv ./good_castep/$seed-*.res ./hopper
+       [[ -d ./good_castep ]] && mv ./good_castep/$seed-*.res ./hopper
     
        test -d "./bad_castep" && mv ./bad_castep/$seed-*.res ./hopper ## WORK ON THIS - NEED THE STRUCTURE THAT FAILED
        
@@ -411,7 +478,7 @@ function relaxandjiggle {
        
     fi
     
-    echo 'launching crud ...'
+    echo '    launching crud ...'
     
     spawn-batch  -command crud.pl -mpinp $mpinp &
     
@@ -424,22 +491,22 @@ function relaxandjiggle {
 	    sleep 1
 	    test -f "./STOP" && echo -e '\nstopping chain ..' && ./despawn-batch && exit 0
 	    counter=`ls $seed-*.res ./hopper/$seed-*.res 2> /dev/null | wc -l`
-	    echo -n -e "\r\033[0K"$counter" remaining"
+	    echo -n -e "\r\033[0K    "$counter" remaining"
     done
     
     sleep 1
     
     echo
-    echo 'stopping crud ...'
+    echo '    stopping crud ...'
     
     ./despawn-batch
     
     sleep 5
     
-    echo 'storing structures ...'
+    echo '    storing structures ...'
     
-    cat ./good_castep/$seed-*.res >> data.res
-    
+    [[ -d ./good_castep ]] && cat ./good_castep/$seed-*.res >> data.res
+    	
     rm -fr bad_castep good_castep hopper
     
 }
@@ -448,7 +515,7 @@ function relaxandjiggle {
 
 function genpot {
     
-    echo 'cleaning up ...'
+    echo '    cleaning up ...'
 
     rm -fr $seed $seed.eddp
 
@@ -461,54 +528,59 @@ function genpot {
 	    meanpress=$pressure
     fi
 
-    echo 'constructing features ...'
+    echo '    constructing features ...'
     
-    ntot=`cryan -p $meanpress -de $deltae -r < data.res 2> /dev/null | wc -l`
-    
+    let ntot=`cryan -p $meanpress -de $deltae -r < data.res 2> /dev/null | wc -l`
+		
+	[[ $ntot -gt $ndata && $ndata -ne 0 ]] && ntot=$ndata
+			
     let ntrain=$ntot*8/10
     let nvalid=($ntot-$ntrain)/2
     let ntest=$ntot-$ntrain-$nvalid
 
-    echo 'data split: '$ntrain':'$nvalid':'$ntest
+    echo '    data split: '$ntrain':'$nvalid':'$ntest
     
-    franks $rcut $nbody $npoly $lowexp $highexp $ntrain $nvalid $ntest $deltae $meanpress 2> /dev/null
+    if [[ ${average} == true ]]
+    then
+       [[ $ncycles -gt 0 ]] && (echo '    ncycles>0 not compatible with mean features' ; exit)
+       frankm $rcut $nbody $npoly $lowexp $highexp $ntrain $nvalid $ntest $deltae $meanpress 2> /dev/null
+    else
+       franks $rcut $nbody $npoly $lowexp $highexp $ntrain $nvalid $ntest $deltae $meanpress 2> /dev/null
+    fi
     
-    echo 'launching forge ...'
+    echo '    launching forge ...'
 
     #let numjobs=`cat ~/.spawn | grep -v ^# | awk '{print $2}' | awk -v np="$ompnp" -F'=' '{sum+=int($2/np)} END {print sum}'`
 
     #let numpot=$minpot/$numjobs+1
 
     #let maxpot=$numjobs*$numpot
-    
-    if [[ $nnodes -gt 0 ]]
-    then
-	    farm-batch  -command forge -ompnp $ompnp -es 10 -n 200 -nn $nnodes -np -q -numpot $minpot -s ./$seed/$seed &
-    else
-	    farm-batch  -command forge -ompnp $ompnp -es 10 -n 200 -np -q -numpot $minpot -s ./$seed/$seed &
-    fi
+        
+    [[ $nnodes -ne 0 ]] && nodeflag="-nn ${nnodes//,/ }" || nodeflag=''
+ 
+    farm-batch  -command forge -en $natexp -c $compress -ompnp $ompnp -es 100 -n 1000 $nodeflag -np -q -numpot $minpot -s ./$seed/$seed &
     
     counter=0
 
-    #echo 'maximum '$maxpot' potentials'
+    #echo '    maximum '$maxpot' potentials'
 
-    #let waitpot=$maxpot*95/100
+    #let waitpot=$maxpot*95/100 || waitpot=1
 
-    #echo 'waiting for at least '$waitpot' potentials'
+    #echo '    waiting for at least '$waitpot' potentials'
 
     until [[ $counter -ge $minpot ]]
     do
 	    sleep 10
-	    test -f "./STOP" && echo -e '\nstopping chain ..' && ./defarm-batch && exit 0
+	    test -f "./STOP" && echo -e '\n    stopping chain ..' && ./defarm-batch && exit 0
        #counter=`grep "testing:   testing" $seed/*.out | wc -l`
     counter=`ls $seed/*.ddp 2> /dev/null | wc -l`
-       echo -n -e "\r\033[0K"$counter" potentials"
+       echo -n -e "\r\033[0K    "$counter" potentials"
     done
 
     sleep 10
 
     echo
-    echo 'stopping forge ...'
+    echo '    stopping forge ...'
     
     ./defarm-batch
     
@@ -519,9 +591,9 @@ function genpot {
     ls $seed/$seed*.ddp | shuf | head -n -$minpot | xargs -r rm
     let gotpot=`ls $seed/$seed*.ddp | wc -l`
 
-    echo 'got '$gotpot' potentials'
+    echo '    got '$gotpot' potentials'
     
-    echo 'generate combination ...'
+    echo '    generate combination ...'
     echo
 
     let num_local_cores=(`getconf _NPROCESSORS_ONLN`+1)/2
@@ -531,36 +603,62 @@ function genpot {
 	    let num_local_cores=1
     fi
     
-    ls $seed/$seed*.ddp | flock -ompnp $num_local_cores -p $meanpress -v -q > $seed.eddp
+    ls $seed/$seed*.ddp | flock -ompnp $num_local_cores -p $meanpress -v -q > $seed.eddp 2> flock.out
+    dir=$(date +%y%m%d-%H%M%S)-flock
+    mkdir $dir
+    cp flock-* $dir
+    cp -R $seed{,.cell,.param,.eddp} data.res $dir
+    sleep 1
+	
+    mkdir -p plots
+    
+    mv flock-*.* plots
+    dir=$(date +%y%m%d-%H%M%S)-flock
+    mkdir $dir
+    cp flock-* $dir
+    cp -R $seed{,.cell,.param,.eddp} data.res $dir
+    sleep 1
+   
+	cat flock.out
     dir=$(date +%y%m%d-%H%M%S)-flock
     mkdir $dir
     cp flock-* $dir
     cp -R $seed{,.cell,.param,.eddp} data.res $dir
     sleep 1
 
-    echo 'removing training/validation/testing files ...'
-
-    rm -f training validation testing
+	wait
+ 
+   if [[ ${keep} == true ]]; then
+      echo '    keeping training/validation/testing files ...'
+   else
+      echo '    removing training/validation/testing files ...'
+      rm -f training validation testing
+   fi
     
 }
 
 ################################################################################
 
+banner
+
+echo "      called as "${0##*/}" "${@}
+echo
+
 rm -f ./STOP
 
 # get started with fully random structures
 
-[[ $full -gt 0 ]] && fullrand || echo 'skipping full randomisation'
+[[ $full -gt 0 ]] && fullrand || echo '    skipping full randomisation'
 
 # jiggle marker structures 
 
 nmarks=`ls -1 ./marks/$seed-*.res 2>/dev/null | wc -l`
 
-[[ $nmarks -gt 0 && $Jiggles -gt 0 ]] && markandjiggle || echo 'no marks'
+[[ $nmarks -gt 0 && $Jiggles -gt 0 ]] && markandjiggle || echo '    no marks'
 
 # stop if we have no training data
 
-[[ ! -f ./data.res ]] && ( echo 'no training data found - stopping' ; exit 1 )
+[[ ! -f ./data.res ]] && ( echo '    no training data found - stopping' ; exit 1 )
 
 # generate an initial potential
 
@@ -578,10 +676,13 @@ do
     let nbest=$nbest*$nbest_orig
 done
 
+wait
+
 # report successful completion
 
-[[ ${email} == true ]] && ( echo 'sending email to '`whoami` ; echo 'chain job complete: '$seed' '`date` | sendmail `whoami` )
+[[ ${email} == true ]] && ( echo '    sending email to '`whoami` ; (printf 'Subject: chain completed\n'; echo 'chain job complete: '$seed' '`date`; cat flock.out ) | /usr/sbin/sendmail `whoami` )
 
-echo 'chain job complete: '$seed' '`date`
+echo
+echo '    chain job complete: '$seed' '`date`
 
 exit 0

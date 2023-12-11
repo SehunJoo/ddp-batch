@@ -3,9 +3,10 @@
 set -e
 
 function usage {
-    echo "usage: $(basename $0) [-c] [-n ncycles] [-p pressure] [-l lowpress] [-R] [-r rcut] [-f full] [-m minima] [-b nbest] [-d deviation] [-j jiggles] [-J Jiggles] [-a amp] [-T temp] [-S step] [-t time] [-P npoly] [-L lowexp] [-H highexp] [-B nbody] [-N nnodes] [-E deltae] [-M mpinp] [-O ompnp] [-F minpot] [-e] [-s seed]" 2>&1
+    echo "usage: $(basename $0) [-c] [-D ndata] [-n ncycles] [-p pressure] [-l lowpress] [-R] [-r rcut] [-f full] [-m minima] [-b nbest] [-d deviation] [-w waitseconds] [-j jiggles] [-J Jiggles] [-a amp] [-T temp] [-S step] [-t time] [-P npoly] [-L lowexp] [-H highexp] [-B nbody] [-N nnodes] [-E deltae] [-C compress] [-M mpinp] [-O ompnp] [-F minpot] [-A] [-x natexp] [-k] [-e] [-s seed]" 2>&1
     echo '  iteratively generate a data derived potential'
     echo '   -c             clean up (deletes files)'
+    echo '   -D ndata       truncate dataset'
     echo '   -n ncycles     number of cycles'
     echo '   -p pressure    target pressure (high)'
     echo '   -l lowpress    target pressure (low)'
@@ -14,7 +15,8 @@ function usage {
     echo '   -f full        number of fully random structures'
     echo '   -m minima      number of local minima each cycle'
     echo '   -b nbest       best of nbest minima retained'    
-    echo '   -d deviation   deviation bias'    
+    echo '   -d deviation   deviation bias' 
+	 echo '   -w waitseconds how long to wait for minima before reducing deviation bias'   
     echo '   -j jiggles     number of jiggles of local minima'
     echo '   -J Jiggles     number of jiggles of marker structures'
     echo '   -a amp         amplitude for jiggling'
@@ -27,10 +29,14 @@ function usage {
     echo '   -B nbody       highest body order'
     echo '   -N nnodes      number of nodes in hidden layer'
     echo '   -E deltae      energy window'
+    echo '   -C compress    compress input by factor [1]'
     echo '   -M mpinp       number of remote MPI cores'
     echo '   -O ompnp       number of remote OMP cores'
     echo '   -F minpot      approximate floor for the number of potentials'
-    echo '   -e email       send email to address when completed'
+    echo '   -A             mean features - no active learning'
+    echo '   -x             energy normalisation natom exponent (default 0.5)'
+    echo '   -k             keep intermediate files'
+    echo '   -e             send email to address when completed'
     echo '   -s seed        seedname'
     exit 1
 }
@@ -38,6 +44,7 @@ function usage {
 # set defaults
 
 clean='false'
+ndata=0
 ncycles=5
 pressure=0.001 # Small positive pressure to disfavour expanded cells
 lowpress=0.0
@@ -47,6 +54,7 @@ full=1000
 minima=100
 nbest=1
 deviation=0.0
+waitseconds=600
 jiggles=10
 Jiggles=100
 amp=0.02
@@ -59,18 +67,30 @@ highexp=10
 nbody=3
 nnodes=5
 deltae=10.0
+compress=1.0
 mpinp=4
 ompnp=4
 minpot=0
+average='false'
+natexp=0.5
+keep='false'
 email='false'
 seed='seed'
 
-optstring=":cs:n:p:l:Rr:f:m:b:d:j:J:a:T:S:t:P:L:H:B:N:E:M:O:F:eh"
+if [[ -f data.res ]]; then # If data exists, but default no active learning
+   full=0
+   ncycles=0
+fi
+
+optstring=":cs:D:n:p:l:Rr:f:m:b:d:w:j:J:a:T:S:t:P:L:H:B:N:E:C:M:O:F:Ax:keh"
 
 while getopts ${optstring} arg; do
     case ${arg} in
 	c)
 	    clean="true"
+	    ;;
+	D)
+	    ndata="${OPTARG}"
 	    ;;
 	n)
 	    ncycles="${OPTARG}"
@@ -98,6 +118,9 @@ while getopts ${optstring} arg; do
 	    ;;
 	d)
 	    deviation="${OPTARG}"
+	    ;;
+	w)
+	    waitseconds="${OPTARG}"
 	    ;;
 	j)
 	    jiggles="${OPTARG}"
@@ -135,6 +158,9 @@ while getopts ${optstring} arg; do
 	E)
 	    deltae="${OPTARG}"
 	    ;;
+	C)
+	    compress="${OPTARG}"
+	    ;;
 	M)
 	    mpinp="${OPTARG}"
 	    ;;
@@ -147,6 +173,15 @@ while getopts ${optstring} arg; do
 	s)
 	    seed="${OPTARG}"
 	    ;;
+  	A)
+  	    average="true"
+  	    ;;
+  	x)
+  	    natexp="${OPTARG}"
+  	    ;;
+ 	k)
+ 	    keep="true"
+ 	    ;;
 	e)
 	    email="true"
 	    ;;
@@ -168,17 +203,17 @@ done
 [[ ! -f $seed.cell ]] && ( echo $seed'.cell not found' ; exit 1 )
 
 if ls .spawnpids* &>/dev/null; then
-    echo 'spawn files detected - aborting ...'
+    echo '    spawn files detected - aborting ...'
     exit 1
 fi
 
 if ls .farmpids* &>/dev/null; then
-    echo 'farm files detected - aborting ...'
+    echo '    farm files detected - aborting ...'
     exit 1
 fi
 
 if [[ ${clean} == true ]];then
-    echo 'cleaning up. files will be deleted, do you wish to proceed?'
+    echo '    cleaning up. files will be deleted, do you wish to proceed?'
 
     select yesno in "yes" "all" "no"; do
 	    case $yesno in
@@ -190,55 +225,69 @@ if [[ ${clean} == true ]];then
     
 fi
 
-echo '                                                       '
-echo '               $$\                 $$\                 '
-echo '               $$ |                \__|                '
-echo '      $$$$$$$\ $$$$$$$\   $$$$$$\  $$\ $$$$$$$\        '
-echo '     $$  _____|$$  __$$\  \____$$\ $$ |$$  __$$\       '
-echo '     $$ /      $$ |  $$ | $$$$$$$ |$$ |$$ |  $$ |      '
-echo '     $$ |      $$ |  $$ |$$  __$$ |$$ |$$ |  $$ |      '
-echo '     \$$$$$$$\ $$ |  $$ |\$$$$$$$ |$$ |$$ |  $$ |      '
-echo '      \_______|\__|  \__| \_______|\__|\__|  \__|      '
-echo '                                                       '
-echo '    automated generation of data derived potentials    '
-echo '                                                       '
-echo '       author: Chris J. Pickard, Cambridge 2023        '
-echo '                                                       '
-echo '    summary of parameters - '
-echo
-echo "      ncycles:   "$ncycles
-echo "      pressure:  "$pressure" GPa"
-echo "      lowpress:  "$lowpress" GPa"
-echo "      prand:     "$prand
-echo "      rcut:      "$rcut" Ang"
-echo "      full:      "$full
-echo "      minima:    "$minima
-echo "      nbest:     "$nbest
-echo "      deviation: "$deviation
-echo "      jiggles:   "$jiggles
-echo "      Jiggles:   "$Jiggles
-echo "      amp:       "$amp" Ang"
-echo "      temp:      "$temp" K"
-echo "      step:      "$step" fs"
-echo "      time:      "$time" ps"
-echo "      npoly:     "$npoly
-echo "      lowexp:    "$lowexp
-echo "      highexp:   "$highexp
-echo "      nbody:     "$nbody
-echo "      nnodes:    "$nnodes
-echo "      deltae:    "$deltae
-echo "      mpinp:     "$mpinp
-echo "      ompnp:     "$ompnp
-echo "      minpot:    "$minpot
-echo "      email:     "$email
-echo "      seed:      "$seed
-echo
+## output banner and summarise parameters
+
+function banner {
+
+	echo '                                                       '
+	echo '               $$\                 $$\                 '
+	echo '               $$ |                \__|                '
+	echo '      $$$$$$$\ $$$$$$$\   $$$$$$\  $$\ $$$$$$$\        '
+	echo '     $$  _____|$$  __$$\  \____$$\ $$ |$$  __$$\       '
+	echo '     $$ /      $$ |  $$ | $$$$$$$ |$$ |$$ |  $$ |      '
+	echo '     $$ |      $$ |  $$ |$$  __$$ |$$ |$$ |  $$ |      '
+	echo '     \$$$$$$$\ $$ |  $$ |\$$$$$$$ |$$ |$$ |  $$ |      '
+	echo '      \_______|\__|  \__| \_______|\__|\__|  \__|      '
+	echo '                                                       '
+	echo '    automated generation of data derived potentials    '
+	echo '                                                       '
+	echo '       author: Chris J. Pickard, Cambridge 2023        '
+	echo '                                                       '
+	echo '    summary of parameters - '
+	echo
+	echo "      ndata:       "$ndata
+	echo "      ncycles:     "$ncycles
+	echo "      pressure:    "$pressure" GPa"
+	echo "      lowpress:    "$lowpress" GPa"
+	echo "      prand:       "$prand
+	echo "      rcut:        "$rcut" Ang"
+	echo "      full:        "$full
+	echo "      minima:      "$minima
+	echo "      nbest:       "$nbest
+	echo "      deviation:   "$deviation
+	echo "      waitseconds: "$waitseconds
+	echo "      jiggles:     "$jiggles
+	echo "      Jiggles:     "$Jiggles
+	echo "      amp:         "$amp" Ang"
+	echo "      temp:        "$temp" K"
+	echo "      step:        "$step" fs"
+	echo "      time:        "$time" ps"
+	echo "      npoly:       "$npoly
+	echo "      lowexp:      "$lowexp
+	echo "      highexp:     "$highexp
+	echo "      nbody:       "$nbody
+	echo "      nnodes:      "$nnodes
+	echo "      deltae:      "$deltae
+	echo "      compress:    "$compress
+	echo "      mpinp:       "$mpinp
+	echo "      ompnp:       "$ompnp
+	echo "      minpot:      "$minpot
+	echo "      average:     "$average
+	echo "      natexp:      "$natexp
+	echo "      keep:        "$keep
+	echo "      email:       "$email
+	echo "      seed:        "$seed
+	echo
+	echo "      job starting: "$seed" "`date`
+	echo
+
+}
 
 ## construct ensemble potentials
 
 function genpot {
     
-    echo 'cleaning up ...'
+    echo '    cleaning up ...'
 
     rm -fr $seed $seed.eddp
 
@@ -251,54 +300,59 @@ function genpot {
 	    meanpress=$pressure
     fi
 
-    echo 'constructing features ...'
+    echo '    constructing features ...'
     
-    ntot=`cryan -p $meanpress -de $deltae -r < data.res 2> /dev/null | wc -l`
-    
+    let ntot=`cryan -p $meanpress -de $deltae -r < data.res 2> /dev/null | wc -l`
+		
+	[[ $ntot -gt $ndata && $ndata -ne 0 ]] && ntot=$ndata
+			
     let ntrain=$ntot*8/10
     let nvalid=($ntot-$ntrain)/2
     let ntest=$ntot-$ntrain-$nvalid
 
-    echo 'data split: '$ntrain':'$nvalid':'$ntest
+    echo '    data split: '$ntrain':'$nvalid':'$ntest
     
-    franks $rcut $nbody $npoly $lowexp $highexp $ntrain $nvalid $ntest $deltae $meanpress 2> /dev/null
+    if [[ ${average} == true ]]
+    then
+       [[ $ncycles -gt 0 ]] && (echo '    ncycles>0 not compatible with mean features' ; exit)
+       frankm $rcut $nbody $npoly $lowexp $highexp $ntrain $nvalid $ntest $deltae $meanpress 2> /dev/null
+    else
+       franks $rcut $nbody $npoly $lowexp $highexp $ntrain $nvalid $ntest $deltae $meanpress 2> /dev/null
+    fi
     
-    echo 'launching forge ...'
+    echo '    launching forge ...'
 
     #let numjobs=`cat ~/.spawn | grep -v ^# | awk '{print $2}' | awk -v np="$ompnp" -F'=' '{sum+=int($2/np)} END {print sum}'`
 
     #let numpot=$minpot/$numjobs+1
 
     #let maxpot=$numjobs*$numpot
-    
-    if [[ $nnodes -gt 0 ]]
-    then
-	    farm-batch  -command forge -ompnp $ompnp -es 10 -n 200 -nn $nnodes -np -q -numpot $minpot -s ./$seed/$seed &
-    else
-	    farm-batch  -command forge -ompnp $ompnp -es 10 -n 200 -np -q -numpot $minpot -s ./$seed/$seed &
-    fi
+        
+    [[ $nnodes -ne 0 ]] && nodeflag="-nn ${nnodes//,/ }" || nodeflag=''
+ 
+    farm-batch  -command forge -en $natexp -c $compress -ompnp $ompnp -es 100 -n 1000 $nodeflag -np -q -numpot $minpot -s ./$seed/$seed &
     
     counter=0
 
-    #echo 'maximum '$maxpot' potentials'
+    #echo '    maximum '$maxpot' potentials'
 
-    #let waitpot=$maxpot*95/100
+    #let waitpot=$maxpot*95/100 || waitpot=1
 
-    #echo 'waiting for at least '$waitpot' potentials'
+    #echo '    waiting for at least '$waitpot' potentials'
 
     until [[ $counter -ge $minpot ]]
     do
 	    sleep 10
-	    test -f "./STOP" && echo -e '\nstopping chain ..' && ./defarm-batch && exit 0
+	    test -f "./STOP" && echo -e '\n    stopping chain ..' && ./defarm-batch && exit 0
        #counter=`grep "testing:   testing" $seed/*.out | wc -l`
     counter=`ls $seed/*.ddp 2> /dev/null | wc -l`
-       echo -n -e "\r\033[0K"$counter" potentials"
+       echo -n -e "\r\033[0K    "$counter" potentials"
     done
 
     sleep 10
 
     echo
-    echo 'stopping forge ...'
+    echo '    stopping forge ...'
     
     ./defarm-batch
     
@@ -309,9 +363,9 @@ function genpot {
     ls $seed/$seed*.ddp | shuf | head -n -$minpot | xargs -r rm
     let gotpot=`ls $seed/$seed*.ddp | wc -l`
 
-    echo 'got '$gotpot' potentials'
+    echo '    got '$gotpot' potentials'
     
-    echo 'generate combination ...'
+    echo '    generate combination ...'
     echo
 
     let num_local_cores=(`getconf _NPROCESSORS_ONLN`+1)/2
@@ -321,20 +375,46 @@ function genpot {
 	    let num_local_cores=1
     fi
     
-    ls $seed/$seed*.ddp | flock -ompnp $num_local_cores -p $meanpress -v -q > $seed.eddp
+    ls $seed/$seed*.ddp | flock -ompnp $num_local_cores -p $meanpress -v -q > $seed.eddp 2> flock.out
+    dir=$(date +%y%m%d-%H%M%S)-flock
+    mkdir $dir
+    cp flock-* $dir
+    cp -R $seed{,.cell,.param,.eddp} data.res $dir
+    sleep 1
+	
+    mkdir -p plots
+    
+    mv flock-*.* plots
+    dir=$(date +%y%m%d-%H%M%S)-flock
+    mkdir $dir
+    cp flock-* $dir
+    cp -R $seed{,.cell,.param,.eddp} data.res $dir
+    sleep 1
+   
+	cat flock.out
     dir=$(date +%y%m%d-%H%M%S)-flock
     mkdir $dir
     cp flock-* $dir
     cp -R $seed{,.cell,.param,.eddp} data.res $dir
     sleep 1
 
-    echo 'removing training/validation/testing files ...'
-
-    rm -f training validation testing
+	wait
+ 
+   if [[ ${keep} == true ]]; then
+      echo '    keeping training/validation/testing files ...'
+   else
+      echo '    removing training/validation/testing files ...'
+      rm -f training validation testing
+   fi
     
 }
 
 ################################################################################
+
+banner
+
+echo "      called as "${0##*/}" "${@}
+echo
 
 rm -f ./STOP
 
@@ -344,8 +424,9 @@ genpot
 
 # report successful completion
 
-[[ ${email} == true ]] && ( echo 'sending email to '`whoami` ; echo 'chain job complete: '$seed' '`date` | sendmail `whoami` )
+[[ ${email} == true ]] && ( echo '    sending email to '`whoami` ; (printf 'Subject: chain completed\n'; echo 'chain job complete: '$seed' '`date`; cat flock.out ) | /usr/sbin/sendmail `whoami` )
 
-echo 'chain job complete: '$seed' '`date`
+echo
+echo '    chain job complete: '$seed' '`date`
 
 exit 0
