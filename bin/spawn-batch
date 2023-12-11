@@ -376,7 +376,7 @@ function genjob {
             echo 'do'
 		    echo '    nodeid=""'
 		    echo '    tempid=""'
-		    echo "    for nj in $(seq 1 ${nnodes_per_subjob})"
+		    echo '    for nj in `seq 1' ${nnodes_per_subjob}'`'
             echo '    do'
 		    echo '        index=$(( ni + nj - 1 ))'
 		    echo '        tempid+="${templist[index]},"'
