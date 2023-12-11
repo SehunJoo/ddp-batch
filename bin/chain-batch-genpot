@@ -385,18 +385,8 @@ function genpot {
     mkdir -p plots
     
     mv flock-*.* plots
-    dir=$(date +%y%m%d-%H%M%S)-flock
-    mkdir $dir
-    cp flock-* $dir
-    cp -R $seed{,.cell,.param,.eddp} data.res $dir
-    sleep 1
    
 	cat flock.out
-    dir=$(date +%y%m%d-%H%M%S)-flock
-    mkdir $dir
-    cp flock-* $dir
-    cp -R $seed{,.cell,.param,.eddp} data.res $dir
-    sleep 1
 
 	wait
  
