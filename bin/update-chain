@@ -56,12 +56,12 @@ function gen_chainbatch {
         | sed    -e '/let numjobs/   s/let/#let/ ' \
                  -e '/let numpot/    s/let/#let/ ' \
                  -e '/let maxpot/    s/let/#let/ ' \
-                 -e '/forge -ompnp/  s/-numpot $numpot/-numpot $minpot/ ' \
-                 -e "/forge -ompnp/  s/farm/farm-batch ${opts} -command/ " \
-                 -e '/forge -ompnp/  s/$seed\/$seed/$seed\/$seed \&/ ' \
-                 -e "/echo 'maximum/ s/echo/#echo/ " \
+                 -e '/forge -en/  s/-numpot $numpot/-numpot $minpot/ ' \
+                 -e "/forge -en/  s/farm/farm-batch ${opts} -command/ " \
+                 -e '/forge -en/  s/$seed\/$seed/$seed\/$seed \&/ ' \
+                 -e "/echo '    maximum/ s/echo/#echo/ " \
                  -e '/let waitpot/   s/let/#let/ ' \
-                 -e "/echo 'waiting/ s/echo/#echo/ " \
+                 -e "/echo '    waiting/ s/echo/#echo/ " \
                  -e '/until/         s/waitpot/minpot/ ' \
                  -e '/defarm/        s/defarm/.\/defarm-batch/ ' \
                  -e '/counter=`grep/ s/counter/#counter/ ' \
