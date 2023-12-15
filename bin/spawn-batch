@@ -2,7 +2,7 @@
 
 set -e
 
-# check input parameters
+# Check input parameters
 
 function usage {
     echo 1>&2
@@ -25,7 +25,7 @@ if [ $# -lt 1 ]; then
 fi
 
 
-# set defaults
+# Set defaults
 
 despawn='false'
 bakres='none'
@@ -96,12 +96,32 @@ while [ $# -ge 1 ] ; do
     esac
 done
 
+jobscript="jobscript_${program}.sh"
 
-# get options for scheduler
 
-[[ $(ls *.schedopt | wc -l) -ne 1 ]] && echo "There should be one *.schedopt file" && exit 1
+
+# Check before proceeding
+
+if ls .spawnpids* &>/dev/null; then
+    echo 'Spawn files detected - aborting ...'
+    exit 127
+fi
+
+if [[ -f STOP ]]; then
+    echo 'STOP file detected - aborting ...'
+    exit 127
+fi
+
+if [[ $(ls *.schedopt | wc -l) -ne 1 ]]; then
+    echo "There should be one *.schedopt file"
+    exit 127
+fi
+
+
+
+# Read *.schedopt file and get options for scheduler
+
 optfile=$(ls *.schedopt)
-
 schedopt=$(cat $optfile  | sed '/^%block default/,/^%endblock default/!d;//d')
 
 if [[ $program == "airss" ]]; then
@@ -115,16 +135,29 @@ fi
 nonschedopt=$(echo "$schedopt" | sed '/^#/d')
 schedopt=$(echo "$schedopt" | sed -n '/^#/p')
 
-# scheduler type
+
+
+# Specify the scheduler type
 
 nopts_sge=$(echo "$schedopt" | sed -n '/^#\$/p' | wc -l)
 nopts_slurm=$(echo "$schedopt" | sed -n '/^#SBATCH/p' | wc -l)
-
-if [[ $nopts_sge -gt 0 ]]
-then
+if [[ $nopts_sge -gt 0 ]]; then
     sched='sge'
     schedopt=$(echo "$schedopt" | sed -n '/^#\$/p')
+elif [[ $nopts_slurm -gt 0 ]]; then
+    sched='slurm'
+    schedopt=$(echo "$schedopt" | sed -n '/^#SBATCH/p')
+else
+    echo "sge | slurm is only available"
+    exit 127
+fi
 
+
+
+# Specify the amount of computational resources to request
+
+if [[ $sched == "sge" ]]
+then
     # number of cores & nodes (requested) per each job
 
     sched_ncores_per_job=$(echo "$schedopt" | sed -n '/ -pe /p' | awk '{print $4}')
@@ -137,11 +170,8 @@ then
     sched_nnodes_per_array=$(echo "$sched_nnodes_per_job * $sched_njobs_per_array" | bc)
     sched_ncores_per_array=$(echo "$sched_ncores_per_job * $sched_njobs_per_array" | bc)
 
-elif [[ $nopts_slurm -gt 0 ]]
+elif [[ $sched == "slurm" ]]
 then
-    sched='slurm'
-    schedopt=$(echo "$schedopt" | sed -n '/^#SBATCH/p')
-
     # number of cores & nodes (requested) per each job
 
     sched_ncores_per_node=$(echo "$schedopt" | sed -n '/--tasks-per-node/p' | awk 'BEGIN {FS="--tasks-per-node="} {print $2}')
@@ -153,64 +183,25 @@ then
     sched_njobs_per_array=$(echo "$schedopt" | sed -n '/--array/p' | awk 'BEGIN {FS="--array="} {print $2}' | awk 'BEGIN {FS="-"} {print $2}')
     sched_nnodes_per_array=$(echo "$sched_nnodes_per_job * $sched_njobs_per_array" | bc)
     sched_ncores_per_array=$(echo "$sched_ncores_per_job * $sched_njobs_per_array" | bc)
-else
-    echo "sge | slurm is only available" && exit 1
 fi
 
 
-if [[ $verbose == "true" ]]; then
-    echo
-    echo "computational resources requested through scheduler"
-    echo
-    echo "scheduler         : $sched (# opt (sge): $nopts_sge. # opt (slurm): $nopts_slurm)"
-    echo
-    echo "number of physical cores    : ${sched_ncores_per_node} /node"
-    echo
-    echo "number of nodes (requested) : ${sched_nnodes_per_job} /job"
-    echo "number of cores (requested) : ${sched_ncores_per_job} /job"
-    echo
-    echo "number of jobs  (requested) : ${sched_njobs_per_array} /array"
-    echo "number of nodes (requested) : ${sched_nnodes_per_array} /array"
-    echo "number of cores (requested) : ${sched_ncores_per_array} /array"
-fi
 
-
-# get information about computational resources securing for each subjob (underpopulation of node or multi-node)
-# determine how much resources we use for each subjob
+# Specify the size of subjobs
 
 nnodes_per_subjob=$(echo "$nonschedopt" | grep 'nnodes_per_subjob' | awk 'BEGIN {FS="="} {print $2}' | awk '{print $1}')
 [[ -z $nnodes_per_subjob ]] && nnodes_per_subjob=1
 ncores_per_subjob=$(echo "$nonschedopt" | grep 'ncores_per_subjob' | awk 'BEGIN {FS="="} {print $2}' | awk '{print $1}')
 [[ -z $ncores_per_subjob ]] && ncores_per_subjob=$sched_ncores_per_node
-
-# variables for multi-node subjob (nnodes_per_subjob > 1)
 ncores_per_subjob_per_node=$(( ($ncores_per_subjob + $nnodes_per_subjob - 1) / $nnodes_per_subjob ))
 mpinp_per_node=$(( ($mpinp + $nnodes_per_subjob - 1) / $nnodes_per_subjob )) # for underpopulation
 
-if [[ $nnodes_per_subjob -gt $sched_nnodes_per_job ]]; then
-    echo "# nodes (/job)    : $sched_nnodes_per_job"
-    echo "# nodes (/subjob) : $nnodes_per_subjob"
-    echo "number of nodes for a subjob should be equal or less than number of nodes requested for a job"
-    exit 127
-fi
-
-if [[ $ncores_per_subjob_per_node -gt $sched_ncores_per_node ]]; then
-    echo "# cores (/node/subjob) : $ncores_per_subjob_per_node"
-    echo "this should be equal or less than $sched_ncores_per_node"
-    exit 127
-fi
+mem_per_core=$(echo "$nonschedopt" | grep 'mem_per_core' | awk 'BEGIN {FS="="} {print $2}' | awk '{print $1}')
+mem_per_subjob=$(( $mem_per_core * $ncores_per_subjob_per_node ))
 
 
-if [[ $mpinp -gt $ncores_per_subjob ]]; then
-    echo "mpinp : $mpinp"
-    echo "# cores (/subjob) : $ncores_per_subjob"
-    echo "mpinp should be equal or less than $ncores_per_subjob"
-    exit 127
-fi
 
-
-# number of subjobs
-# determine how we distribute subjobs over the nodes
+# Specify how to distribute subjobs
 
 if [[ $nnodes_per_subjob -eq 1 ]]; then
 
@@ -218,7 +209,6 @@ if [[ $nnodes_per_subjob -eq 1 ]]; then
 
     nsubjobs_per_node=$(echo "$sched_ncores_per_node / $ncores_per_subjob" | bc)
     nsubjobs_per_job=$(echo "$sched_nnodes_per_job * $nsubjobs_per_node" | bc)
-    nsubjobs_per_array=$(echo "$sched_njobs_per_array * $nsubjobs_per_job" | bc)
 
 elif [[ $nnodes_per_subjob -gt 1 ]]; then
 
@@ -226,48 +216,36 @@ elif [[ $nnodes_per_subjob -gt 1 ]]; then
 
     nsubjobs_per_node="1"
     nsubjobs_per_job=$(echo "$sched_nnodes_per_job / $nnodes_per_subjob" | bc)
-    nsubjobs_per_array=$(echo "$sched_njobs_per_array * $nsubjobs_per_job" | bc)
+fi
+nsubjobs_per_array=$(echo "$sched_njobs_per_array * $nsubjobs_per_job" | bc)
+
+
+
+# Check before proceeding
+
+if [[ $nnodes_per_subjob -gt $sched_nnodes_per_job ]]; then
+    echo "Warning: number of nodes for a subjob should be equal or less than number of nodes requested for a job"
+    echo "number of nodes (/job)    : $sched_nnodes_per_job"
+    echo "number of nodes (/subjob) : $nnodes_per_subjob"
+    exit 127
 fi
 
-# memory per subjob
-
-mem_per_core=$(echo "$nonschedopt" | grep 'mem_per_core' | awk 'BEGIN {FS="="} {print $2}' | awk '{print $1}')
-mem_per_subjob=$(( $mem_per_core * $ncores_per_subjob_per_node ))
-
-if [[ $verbose = "true" ]]; then
-    echo
-    echo "computational resources used for each subjob"
-    echo
-    echo "number of nodes   : ${nnodes_per_subjob} /subjob"
-    echo "number of cores   : ${ncores_per_subjob} /subjob"
-    echo "number of cores   : ${ncores_per_subjob_per_node} out of ${sched_ncores_per_node} /node/subjob"
-    echo
-    echo "number of subjobs : $nsubjobs_per_node /node"
-    echo "number of subjobs : $nsubjobs_per_job /job"
-    echo "number of subjobs : $nsubjobs_per_array /array"
-    echo
-    if [[ $mpinp -lt $ncores_per_subjob ]]; then
-        echo "underpopulating nodes ..."
-        echo "mpinp : $mpinp_per_node /node"
-        echo "# cores : $ncores_per_subjob_per_node /subjob/node"
-    fi
+if [[ $ncores_per_subjob_per_node -gt $sched_ncores_per_node ]]; then
+    echo "Warning: number of cores per node for a subjob should be equal or less than the number of cores per node"
+    echo "number of nodes (/node)        : $sched_ncores_per_node"
+    echo "number of nodes (/subjob/node) : $ncores_per_subjob_per_node"
+    exit 127
 fi
 
-
-jobscript="jobscript_${program}.sh"
-
-# check before proceeding
-
-if ls .spawnpids* &>/dev/null; then
-    echo 'Spawn files detected - aborting ...'
+if [[ $mpinp_per_node -gt $ncores_per_subjob_per_node ]]; then
+    echo "Warning: mpinp per node should be equal or less than the number of cores per node for a subjob"
+    echo "mpinp (/subjob/node)           : $mpinp_per_node"
+    echo "number of cores (/subjob/node) : $ncores_per_subjob_per_node"
     exit 127
 fi
 
 
-if [[ -f STOP ]]; then
-    echo 'STOP file detected - aborting ...'
-    exit 127
-fi
+
 
 echo
 echo
@@ -277,24 +255,11 @@ echo '    o.`Y8b 88"""   dP__Yb    YbdPYbdP   88 Y88 """""""" 88""Yb  dP__Yb    
 echo "    8bodP' 88     dP''''Yb    YP  YP    88  Y8          88oodP dP''''Yb   88    YboodP 88  88"
 echo 
 echo
-echo '    automated generation of jobscript & automated job submission'
+echo '    Automated generation of jobscript & automated job submission'
 echo '    for batch queuing system'
 echo
-echo '    summary of parameters - '
+echo '    Summary of parameters - '
 echo
-echo "      jobscript     : $jobscript"
-echo "      scheduler     : $sched"
-echo "      cores         : $sched_ncores_per_array /array"
-echo "                    : $sched_ncores_per_job /job"
-echo "                    : $sched_ncores_per_node /node"
-echo "      nodes         : $sched_nnodes_per_array /array"
-echo "                    : $sched_nnodes_per_job /job"
-echo "      mpinp         : $mpinp"
-[[ $mpinp -lt $ncores_per_subjob ]] && echo "      underpopulate : $mpinp / $ncores_per_subjob" 
-echo "      memory        : ${mem_per_core}M/core (used)"
-echo "      subjobs       : $nsubjobs_per_array /array"
-echo "                    : $nsubjobs_per_job /job"
-echo "                    : $nsubjobs_per_node /node"
 echo "      command       : $cmdline"
 echo "      program       : $program"
 echo "      seed          : $seed"
@@ -302,9 +267,38 @@ echo "      despawn       : $despawn"
 echo "      bakres        : $bakres"
 [[ $program == "airss" ]] && echo "      max           : $max"
 [[ $program == "forge" ]] && echo "      numpot        : $numpot"
+echo
+echo "    Information on HPC hardware and scheduler"
+echo "      jobscript     : $jobscript"
+echo "      scheduler     : $sched"
+echo "      cores         : $sched_ncores_per_node /node"
+echo
+echo "    The amount of computational resources to request"
+echo "      cores         : $sched_ncores_per_job /job"
+echo "      nodes         : $sched_nnodes_per_job /job"
+echo "      jobs          : $sched_njobs_per_array /array"
+echo "      cores         : $sched_ncores_per_array /array"
+echo "      nodes         : $sched_nnodes_per_array /array"
+echo
+echo "    The size of each subjob"
+echo "      nodes         : $nnodes_per_subjob /subjob"
+echo "      cores         : $ncores_per_subjob /subjob"
+echo "                    : $ncores_per_subjob_per_node /subjob/node"
+echo "      mpinp         : $mpinp /subjob"
+echo "                    : $mpinp_per_node /subjob/node"
+echo "      memory        : ${mem_per_core}M/core"
+echo 
+echo "    The distirbution of subjobs"
+echo "      subjobs       : $nsubjobs_per_node /node"
+echo "                    : $nsubjobs_per_job /job"
+echo "                    : $nsubjobs_per_array /array"
+echo
+if [[ $mpinp -lt $ncores_per_subjob ]]; then
+echo "      underpopulate : $mpinp_per_node /node out of $ncores_per_subjob_per_node /node" 
+fi
 
 
-## generate batch script to run an MPI paralleli array job under Sun Grid Engine (SGE) batch queuing system
+## Generate batch script to run an MPI parallel array job under Sun Grid Engine (SGE) batch queuing system
 
 function genjob {
     
