@@ -3,7 +3,7 @@
 set -e
 
 function usage {
-    echo "usage: $(basename $0) [-c] [-D ndata] [-n ncycles] [-p pressure] [-l lowpress] [-R] [-r rcut] [-f full] [-m minima] [-b nbest] [-d deviation] [-w waitseconds] [-j jiggles] [-J Jiggles] [-a amp] [-T temp] [-S step] [-t time] [-P npoly] [-L lowexp] [-H highexp] [-B nbody] [-N nnodes] [-E deltae] [-C compress] [-M mpinp] [-O ompnp] [-F minpot] [-A] [-x natexp] [-k] [-e] [-s seed]" 2>&1
+    echo "usage: $(basename $0) [-c] [-D ndata] [-n ncycles] [-p pressure] [-l lowpress] [-R] [-r rcut] [-f full] [-m minima] [-b nbest] [-d deviation] [-w waitseconds] [-j jiggles] [-J Jiggles] [-a amp] [-T temp] [-S step] [-t time] [-P npoly] [-L lowexp] [-H highexp] [-B nbody] [-N nnodes] [-E deltae] [-C compress] [-M mpinp] [-O ompnp] [-F minpot] [-A] [-x natexp] [-u nembed] [-k] [-e] [-s seed]" 2>&1
     echo '  iteratively generate a data derived potential'
     echo '   -c             clean up (deletes files)'
     echo '   -D ndata       truncate dataset'
@@ -35,6 +35,7 @@ function usage {
     echo '   -F minpot      approximate floor for the number of potentials'
     echo '   -A             mean features - no active learning'
     echo '   -x             energy normalisation natom exponent (default 0.5)'
+    echo '   -u             size of composition embedding space (0)'
     echo '   -k             keep intermediate files'
     echo '   -e             send email to address when completed'
     echo '   -s seed        seedname'
@@ -73,6 +74,7 @@ ompnp=4
 minpot=0
 average='false'
 natexp=0.5
+nembed=0
 keep='false'
 email='false'
 seed='seed'
@@ -82,7 +84,7 @@ if [[ -f data.res ]]; then # If data exists, but default no active learning
    ncycles=0
 fi
 
-optstring=":cs:D:n:p:l:Rr:f:m:b:d:w:j:J:a:T:S:t:P:L:H:B:N:E:C:M:O:F:Ax:keh"
+optstring=":cs:D:n:p:l:Rr:f:m:b:d:w:j:J:a:T:S:t:P:L:H:B:N:E:C:M:O:F:Ax:u:keh"
 
 while getopts ${optstring} arg; do
     case ${arg} in
@@ -179,6 +181,9 @@ while getopts ${optstring} arg; do
   	x)
   	    natexp="${OPTARG}"
   	    ;;
+   u)
+       nembed="${OPTARG}"
+       ;;
  	k)
  	    keep="true"
  	    ;;
@@ -274,6 +279,7 @@ function banner {
 	echo "      minpot:      "$minpot
 	echo "      average:     "$average
 	echo "      natexp:      "$natexp
+	echo "      nembed:      "$nembed
 	echo "      keep:        "$keep
 	echo "      email:       "$email
 	echo "      seed:        "$seed
@@ -543,9 +549,9 @@ function genpot {
     if [[ ${average} == true ]]
     then
        [[ $ncycles -gt 0 ]] && (echo '    ncycles>0 not compatible with mean features' ; exit)
-       frankm $rcut $nbody $npoly $lowexp $highexp $ntrain $nvalid $ntest $deltae $meanpress 2> /dev/null
+       frankm $rcut $nbody $npoly $lowexp $highexp $ntrain $nvalid $ntest $deltae $meanpress $nembed 2> /dev/null
     else
-       franks $rcut $nbody $npoly $lowexp $highexp $ntrain $nvalid $ntest $deltae $meanpress 2> /dev/null
+       franks $rcut $nbody $npoly $lowexp $highexp $ntrain $nvalid $ntest $deltae $meanpress $nembed 2> /dev/null
     fi
     
     echo '    launching forge ...'
@@ -573,7 +579,7 @@ function genpot {
 	    sleep 10
 	    test -f "./STOP" && echo -e '\n    stopping chain ..' && ./defarm-batch && exit 0
        #counter=`grep "testing:   testing" $seed/*.out | wc -l`
-    counter=`ls $seed/*.ddp 2> /dev/null | wc -l`
+        counter=`ls $seed/*.ddp 2> /dev/null | wc -l`
        echo -n -e "\r\033[0K    "$counter" potentials"
     done
 
