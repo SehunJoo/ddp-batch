@@ -23,6 +23,8 @@ function gen_chainbatch {
                  -e 's/defarm/.\/defarm-batch/ ' \
                  -e 's/STOP/STOP jobscript_*.sh DONE_*/ ' \
                  -e 's/exit 0/ rm -fr  despawn-batch defarm-batch; exit 0/ ' \
+		 -e '/remote/d ' \
+		 -e '/rootdir/d ' \
         >> $chain.temp
     
     ## fullrand: generate data through full randomisation, and no relaxation
@@ -56,9 +58,13 @@ function gen_chainbatch {
         | sed    -e '/let numjobs/       s/let/#let/ ' \
                  -e '/let numpot/        s/let/#let/ ' \
                  -e '/let maxpot/        s/let/#let/ ' \
-                 -e '/forge -en/         s/-numpot $numpot/-numpot $minpot/ ' \
-                 -e "/forge -en/         s/farm/farm-batch ${opts} -command/ " \
-                 -e '/forge -en/         s/$seed\/$seed/$seed\/$seed \&/ ' \
+		 -e '/frankm/            s/ssh -x $remotenode "cd $rootdir ;/spawn-batch -command/' \
+                 -e '/frankm/            s+2> /dev/null"++' \
+                 -e '/franks/            s/ssh -x $remotenode "cd $rootdir ;/spawn-batch -command/' \
+                 -e '/franks/            s+2> /dev/null"++' \
+                 -e '/forge $earlystop/         s/-numpot $numpot/-numpot $minpot/ ' \
+                 -e '/forge $earlystop/'"         s/farm/farm-batch ${opts} -command/ " \
+                 -e '/forge $earlystop/         s/$seed\/$seed/$seed\/$seed \&/ ' \
                  -e "/echo '    maximum/ s/echo/#echo/ " \
                  -e '/let waitpot/       s/let/#let/ ' \
                  -e "/echo '    waiting/ s/echo/#echo/ " \
@@ -69,6 +75,8 @@ function gen_chainbatch {
                  -e '/let gotpot/        i \    find . -name \"$seed/$seed*.ddp\" -empty -type f -delete' \
                  -e '/let gotpot/        i \    grep -L powers $seed/$seed*.ddp | xargs rm -f' \
                  -e '/let gotpot/        i \    ls $seed/$seed*.ddp | shuf | head -n -$minpot | xargs -r rm' \
+		 -e '/flock -ompnp/      s/ssh -x $remotenode "cd $rootdir ;/spawn-batch -command/ ' \
+		 -e '/flock -ompnp/      s/> $seed.eddp 2> flock.out"// '\
                  -e '/flock -ompnp/      a \    dir=$(date +%y%m%d-%H%M%S)-flock' \
                  -e '/flock -ompnp/      a \    mkdir $dir' \
                  -e '/flock -ompnp/      a \    cp flock-* $dir' \
