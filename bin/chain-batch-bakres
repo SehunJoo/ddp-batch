@@ -298,6 +298,8 @@ function banner {
 	echo "      seed:        "$seed
 	echo "      seed:        "$seed
    echo
+	echo "      remotenode:  "$remotenode
+	echo "      remotecores: "$remotecores
 	echo
 	echo "      job starting: "$seed" "`date`
 	echo
@@ -406,18 +408,15 @@ function relaxandjiggle {
 
     counter=0
 
-    jobid=$(cat .spawnpids.* | grep jobid: | head -n 1 | awk "{print $2}") 
-    until [[ ! -z $running ]]; do 
-        running=`squeue -h -j $jobid | awk '{ if ($5 == "R" && !flag) { flag=1 } } END { print flag }'` 
-        sleep 5 
-    done 
-	SECONDS=0
+	ntrial=0
 
-    until [[ $counter -ge $minima || $SECONDS -ge $waitseconds ]]
+    until [[ $counter -ge $minima || $ntrial -ge $waitseconds ]]
     do
 	    sleep 1
 	    test -f "./STOP" && echo -e '\nstopping chain ..' && ./despawn-batch && exit 0
 	    counter=`ls $seed-*.res 2> /dev/null | wc -l`
+        nfail=$(ls trash/*.err 2> /dev/null | wc -l) 
+        ntrial=$((counter + nfail)) 
 	    echo -n -e "\r\033[0K    "$counter" structures"
     done
     echo
@@ -435,6 +434,7 @@ function relaxandjiggle {
     ./despawn-batch
     
     sleep 5
+    rm -rf trash
     
     echo '    shaking structures ...'
     
@@ -569,9 +569,9 @@ function genpot {
     if [[ ${average} == true ]]
     then
        [[ $ncycles -gt 0 ]] && (echo '    ncycles>0 not compatible with mean features' ; exit)
-       spawn-batch -command frankm $rcut $nbody $npoly $lowexp $highexp $ntrain $nvalid $ntest $deltae $meanpress $nembed 
+       spawn-batch -command " frankm $rcut $nbody $npoly $lowexp $highexp $ntrain $nvalid $ntest $deltae $meanpress $nembed 2> /dev/null"
     else
-       spawn-batch -command franks $rcut $nbody $npoly $lowexp $highexp $ntrain $nvalid $ntest $deltae $meanpress $nembed 
+       spawn-batch -command " franks $rcut $nbody $npoly $lowexp $highexp $ntrain $nvalid $ntest $deltae $meanpress $nembed 2> /dev/null"
     fi
     
     echo '    launching forge ...'
@@ -626,7 +626,7 @@ function genpot {
     
     [[ ${noparity} == true ]] && parityplot='-np -nt' || parityplot=''
     
-    spawn-batch -command ls $seed/$seed*.ddp | flock -ompnp $remotecores -p $meanpress -v -q $parityplot 
+    spawn-batch -command " ls $seed/$seed*.ddp | flock -ompnp $remotecores -p $meanpress -v -q $parityplot > $seed.eddp 2> flock.out"
     dir=$(date +%y%m%d-%H%M%S)-flock
     mkdir $dir
     cp flock-* $dir

@@ -49,18 +49,14 @@ function gen_chainbatch {
     
     ## relaxandjiggle: generate data by relaxation of random structures using repose, and computing energy using castep
     sed -n '/^## generate data by relaxation of random structures using repose/,/^}/p' $chain \
-        | sed -n -e '1,/shaking structures .../p' | head -n -1 \
         | sed    -e "/airss.pl/      s/spawn airss.pl/spawn-batch ${opts} -command airss.pl -max \$minima -keep/" \
                  -e '/airss.pl/      s/$seed/$seed \&/ ' \
-                 -e '/SECONDS/       s/SECONDS/ntrial/' \
-                 -e '/counter=`/     a \        nfail=$(ls trash/*.err 2> /dev/null | wc -l)\ ' \
-                 -e '/counter=`/     a \        ntrial=$((counter + nfail))\ ' \
+                 -e '/SECONDS=0/     i \    jobid=$(cat .spawnpids.* | grep jobid: | head -n 1 | awk "{print $2}")\ ' \
+                 -e '/SECONDS=0/     i \    until [[ ! -z $running ]]; do\ ' \
+                 -e '/SECONDS=0/     i \        running=`squeue -h -j $jobid | awk '"'"'{ if ($5 == "R" && !flag) { flag=1 } } END { print flag }'"'"'`\ ' \
+                 -e '/SECONDS=0/     i \        sleep 5\ ' \
+                 -e '/SECONDS=0/     i \    done\ ' \
                  -e '/despawn/       s/despawn/.\/despawn-batch/' \
-                 -e '$               i \    rm -rf trash' \
-        >> $chain.temp
-    sed -n '/^## generate data by relaxation of random structures using repose/,/^}/p' $chain \
-        | sed -n -e '/shaking structures .../,$p' \
-        | sed    -e '/despawn/       s/despawn/.\/despawn-batch/' \
                  -e "/crud.pl/       s/spawn-slow/spawn-batch ${opts} -command/" \
                  -e '/crud.pl/       s/$mpinp/$mpinp \&/' \
         >> $chain.temp

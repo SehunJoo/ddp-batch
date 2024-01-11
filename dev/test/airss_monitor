@@ -1,0 +1,51 @@
+#!/bin/bash
+
+set -e
+
+if [ $# -ne 3 ]; then
+    echo 1>&2 "Usage: airss_monitor <jobid> <seed> <max>"
+    exit 127
+fi
+
+# get arguments
+
+jobid=$1
+seed=$3
+max=$4
+
+prefix='.spawnpids'
+jids=${jobid}
+
+# check the number of random structure generated (./*.res files)
+
+tsec_start=$(date +%s)
+counter=0
+
+until [[ $counter -ge $max ]]
+do
+    sleep 1
+
+    counter=$(find . -maxdepth 1 -type f -name "$seed-*.res" 2> /dev/null | sed "/data.res/d" | xargs grep --no-filename TITL 2> /dev/null | wc -l)
+
+    t_check=$(date +%Y-%m-%d\ %H:%M:%S)
+    tsec_check=$(date +%s)
+    tsec_run=$((${tsec_check} - ${tsec_start}))
+    rt_h=$(( ${tsec_run}/3600 ))
+    rt_m=$(( (${tsec_run}/60) - (${rt_h}*60) ))
+    rt_s=$(( ${tsec_run} - (${tsec_run}/60)*60 ))
+
+    sed -i "/check_time/d"                                    ${prefix}.${jobid}
+    sed -i "/run_time/d"                                      ${prefix}.${jobid}
+    sed -i "/no. structures/d"                                ${prefix}.${jobid}
+    echo "check_time:         ${t_check}"                  >> ${prefix}.${jobid}
+    echo "run_time:           ${rt_h}:${rt_m}:${rt_s}"     >> ${prefix}.${jobid}
+    echo "no. structures:     ${counter}"                  >> ${prefix}.${jobid}
+done
+
+sleep 5
+
+# create a DONE file to signal that the job is done
+
+touch DONE_${jobid}
+
+exit 0
