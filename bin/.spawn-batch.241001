@@ -38,8 +38,6 @@ exe='castep'   # default $opt_exec in airss.pl
 numpot='256'   # default 
 
 
-# Parse arguments
-
 while [ $# -ge 1 ] ; do
     case $1 in
         -despawn)
@@ -48,62 +46,44 @@ while [ $# -ge 1 ] ; do
         -genjob)
             genjob='true'; shift 1
             ;;
+        -verbose)
+            verbose='true'; shift 1
+            ;;
         -bakres)
             bakres=$2; shift 2
             ;;
         -command)
             shift 1; cmdline=$*;
+            program=$(echo $1 | awk 'BEGIN {FS="/"} {print $NF}' | awk 'BEGIN { FS = "." }; {print $1}'); shift 1
 
-            # for a quoted command line (required for passing redirection, e.g., franks, flock)
-
-            [[ $# -eq 1 ]] && cmdline_quoted='true' || cmdline_quoted='false'
-
-            # parse arguments from the command line
-
-            if [[ ${cmdline_quoted} == 'true' ]]
-            then
-                program=$(echo $cmdline | awk '{print $1}' | awk 'BEGIN {FS="/"} {print $NF}' | awk 'BEGIN { FS = "." }; {print $1}')
-                [[ $(echo $cmdline | grep flock | wc -l) -eq 1 ]] && program='flock'
-                mpinp=$(echo $cmdline | sed -n 's/.*-mpinp[[:space:]]\+\([0-9]\+\).*/\1/p') # airss | crud
-                [[ -z $mpinp ]] && mpinp=1
-                ompnp=$(echo $cmdline | sed -n 's/.*-ompnp[[:space:]]\+\([0-9]\+\).*/\1/p') # forge | flock
-                [[ -z $ompnp ]] && ompnp=1
-                if [[ $(echo $cmdline | sed -n '/-repose/p' | wc -l) -eq 1 ]]; then
-                    exe='repose' # airss | crud
-                fi
-                shift 1
-            elif [[ ${cmdline_quoted} == 'false' ]]
-            then
-                program=$(echo $1 | awk 'BEGIN {FS="/"} {print $NF}' | awk 'BEGIN { FS = "." }; {print $1}'); shift 1
-                while [ $# -ge 1 ]; do
-                    case $1 in
-                        -mpinp)
-                            mpinp=$2; ompnp=1; shift 2 # airss | crud
-                            ;;
-                        -ompnp)
-                            ompnp=$2; mpinp=1; shift 2 # forge
-                            ;;
-                        -repose)
-                            exe='repose'; shift 1 # airss | crud
-                            ;;
-                        -seed)
-                            seed=$2; shift 2 # airss
-                            ;;
-                        -max)
-                            max=$2; shift 2 # airss
-                            ;;
-                        -numpot)
-                            numpot=$2; shift 2 # forge
-                            ;;
-                        -s)
-                            seed=$(echo $2 | awk 'BEGIN {FS="/"} {print $NF}'); shift 2 # forge
-                            ;;
-                        *)
-                            shift 1
-                            ;;
-                    esac
-                done
-            fi
+            while [ $# -ge 1 ]; do
+                case $1 in
+                    -mpinp)
+                        mpinp=$2; shift 2 # airss | crud
+                        ;;
+                    -ompnp)
+                        mpinp=$2; shift 2 # forge
+                        ;;
+                    -repose)
+                        exe='repose'; shift 1 # airss | crud
+                        ;;
+                    -seed)
+                        seed=$2; shift 2 # airss
+                        ;;
+                    -max)
+                        max=$2; shift 2 # airss
+                        ;;
+                    -numpot)
+                        numpot=$2; shift 2 # forge
+                        ;;
+                    -s)
+                        seed=$(echo $2 | awk 'BEGIN {FS="/"} {print $NF}'); shift 2 # forge
+                        ;;
+                    *)
+                        shift 1
+                        ;;
+                esac
+            done
             ;;
         -h)
             usage
@@ -142,11 +122,19 @@ fi
 # Read *.schedopt file and get options for scheduler
 
 optfile=$(ls *.schedopt)
-schedopt=$(cat $optfile  | sed "/^%block ${program}/,/^%endblock ${program}/!d;//d")
-[ -z "$schedopt" ] &&  schedopt=$(cat $optfile  | sed '/^%block default/,/^%endblock default/!d;//d')
+schedopt=$(cat $optfile  | sed '/^%block default/,/^%endblock default/!d;//d')
+
+if [[ $program == "airss" ]]; then
+    schedopt=$(cat $optfile  | sed '/^%block airss/,/^%endblock airss/!d;//d')
+elif [[ $program == "crud" ]]; then
+    schedopt=$(cat $optfile  | sed '/^%block crud/,/^%endblock crud/!d;//d')
+elif [[ $program == "forge" ]]; then
+    schedopt=$(cat $optfile  | sed '/^%block forge/,/^%endblock forge/!d;//d')
+fi
 
 nonschedopt=$(echo "$schedopt" | sed '/^#/d')
 schedopt=$(echo "$schedopt" | sed -n '/^#/p')
+
 
 
 # Specify the scheduler type
@@ -298,7 +286,6 @@ echo "      cores         : $ncores_per_subjob /subjob"
 echo "                    : $ncores_per_subjob_per_node /subjob/node"
 echo "      mpinp         : $mpinp /subjob"
 echo "                    : $mpinp_per_node /subjob/node"
-echo "      ompnp         : $ompnp /subjob"
 echo "      memory        : ${mem_per_core}M/core"
 echo 
 echo "    The distirbution of subjobs"
@@ -351,11 +338,21 @@ function genjob {
         echo 'jids="${jobid}.${taskid}"'
         echo 'prefix=".spawnpids"'
         echo
+        echo "cmdline='${cmdline}'"
+        echo "program='${program}'"
         echo "mpinp='${mpinp}'"
-        echo "export OMP_NUM_THREADS=${ompnp}"
-        
-        [[ $program == "airss" ]] && echo "seed='${seed}'"
+        if [[ $exe == 'repose' ]] || [[ $program == 'forge' ]]
+        then
+            echo 'export OMP_NUM_THREADS=$mpinp'
+        else
+            echo "export OMP_NUM_THREADS=1"
+        fi
+        echo "seed='${seed}'"
         echo
+        echo "t_submit='$(date +%Y-%m-%d\ %H:%M:%S)'"
+        echo 't_start="$(date +%Y-%m-%d\ %H:%M:%S)"'
+        echo 'tsec_start=$(date +%s)'
+        echo 
     ) >> $jobscript
 
     # job script - run application
@@ -394,32 +391,31 @@ function genjob {
         fi
 
 
-        # command lines for application
-
         if [[ $program == 'airss' || $program == 'crud' ]]
         then
-            # airss & crud
-            if [[ $exe == 'castep' ]] && [[ $sched == 'sge'   ]]; then
+            if [[ $exe == 'castep' ]] && [[ $sched == 'sge'   ]]
+            then
                 echo "        ${cmdline}"'\'
                 echo "            -launch 'mpirun -np '"' \'
                 echo "            -exec 'castep.mpi' &"
-            elif [[ $exe == 'castep' ]] && [[ $sched == 'slurm' ]]; then
+
+            elif [[ $exe == 'castep' ]] && [[ $sched == 'slurm' ]]
+            then
                 echo "        ${cmdline}"' \'
                 echo '            -launch "srun --nodelist=${nodeid} --exact --nodes='"${nnodes_per_subjob}"' --cpus-per-task=1 --mem='"${mem_per_subjob}"'M  --ntasks-per-node='"${mpinp_per_node}"'  --ntasks=" \'
                 echo "            -exec 'castep.mpi' &"
-            elif [[ $exe == 'repose' ]]; then
+
+            elif [[ $exe == 'repose' ]]
+            then
                 echo "        ${cmdline} &"
             fi
+
         elif [[ $program == 'forge' ]]
         then
-            # forge
             echo '        ${cmdline}.${jids}.${nodeid}.${i}  < /dev/null \'
             echo '                                 > ${seed}/${seed}.${jids}.${nodeid}.${i}.out \'
             echo '                                2> ${seed}/${seed}.${jids}.${nodeid}.${i}.err &'
-        elif [[ $program == 'franks' ]] || [[ $program == 'flock' ]]
-        then
-            # franks & flock
-            echo "        ${cmdline}"
+
         else
             echo "        ${cmdline} < /dev/null >& /dev/null &"
         fi
@@ -427,11 +423,17 @@ function genjob {
         echo ''
         echo '        pid=$!'
         echo '        pgid=`ps -o pgid= ${pid}`'
-        echo '        echo "--------------------${jids}.${nodeid}.${i}"      >> ${prefix}.${jids}'
-        echo '        echo "nodeid:             ${nodeid}"                   >> ${prefix}.${jids}'
-        echo '        echo "pid:                ${pid}"                      >> ${prefix}.${jids}'
-        echo '        echo "pgid:               ${pgid}"                     >> ${prefix}.${jids}'
-        echo '        echo "start_time:         $(date +%Y-%m-%d\ %H:%M:%S)" >> ${prefix}.${jids}'
+        echo '        echo "--------------------${jids}.${nodeid}.${i}"       >> ${prefix}.${jids}'
+        echo '        echo "program:            ${program}"                   >> ${prefix}.${jids}'
+        echo '        echo "command:            ${cmdline}"                   >> ${prefix}.${jids}'
+        echo '        echo "jobid:              ${jobid}"                     >> ${prefix}.${jids}'
+        echo '        echo "taskid:             ${taskid}"                    >> ${prefix}.${jids}'
+        echo '        echo "nodeid:             ${nodeid}"                    >> ${prefix}.${jids}'
+        echo '        echo "pid:                ${pid}"                       >> ${prefix}.${jids}'
+        echo '        echo "pgid:               ${pgid}"                      >> ${prefix}.${jids}'
+        echo '        echo "mpinp:              ${mpinp}"                     >> ${prefix}.${jids}'
+        echo '        echo "submit_time:        ${t_submit}"                  >> ${prefix}.${jids}'
+        echo '        echo "start_time:         ${t_start}"                   >> ${prefix}.${jids}'
         echo '    done'
         echo 'done'
         echo
@@ -446,8 +448,6 @@ function genjob {
         (
             echo "# check the number of random structure generated (./*.res files)"
             echo
-            echo 'tsec_start=$(date +%s)'
-            echo 
             echo 'counter=0'
             echo "max='${max}'"
             echo 
@@ -481,8 +481,6 @@ function genjob {
         (
             echo '# check the number of random structure left (./hobber/*.res files)'
             echo
-            echo 'tsec_start=$(date +%s)'
-            echo 
             echo 'counter=1'
             echo
             echo "until [[ \${counter} -lt ${nsubjobs_per_array} ]]"
@@ -519,8 +517,6 @@ function genjob {
         (
             echo '# check the number of potential generated (./$seed/*.ddp files)'
             echo
-            echo 'tsec_start=$(date +%s)'
-            echo 
             echo 'counter=0'
             echo 'counterddp=0'
             echo "numpot='${numpot}'"
@@ -718,11 +714,23 @@ function subjob {
 
     [[ -z $jobid ]] && echo "    job submission failed" && touch ./STOP && exit 1
 
+    echo
+    echo "    program      : ${program}" 
+    echo "    command      : ${cmdline}" 
+    echo "    jobid        : ${jobid}"
+    echo "    no. subjobs  : ${nsubjobs_per_array} /array"
+    echo "    no. subjobs  : ${nsubjobs_per_job} /job"
+    echo "    no. subjobs  : ${nsubjobs_per_node} /node"
+    echo "    no. cores    : $((${nsubjobs_per_array} * ${mpinp})) /array"
+    echo "    no. cores    : $((${nsubjobs_per_job} * ${mpinp})) /job"
+    echo "    no. cores    : $((${nsubjobs_per_node} * ${mpinp})) /node"
+    echo "    no. cores    : ${mpinp} /subjob"
+    echo
+
     (   
         echo "program:            $program"
         echo "command:            $cmdline"
         echo "jobid:              $jobid"
-        echo "submit_time:        $(date +%Y-%m-%d\ %H:%M:%S)"
     ) > .spawnpids.$jobid
 }
 
