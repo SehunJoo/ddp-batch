@@ -35,7 +35,7 @@ function gen_chainbatch {
         >> $chain.temp
     echo >> $chain.temp
     
-    ## marandjiggle: generate data by relaxation of marker structures using repose, and computing energy using castep
+    ## markandjiggle: generate data by relaxation of marker structures using repose, and computing energy using castep
     sed -n '/^## generate data by relaxation of marker structures using repose/,/^}/p' $chain \
         | sed    -e "/crud.pl/       s/spawn-slow/spawn-batch ${opts} -command/" \
                  -e '/crud.pl/       s/$mpinp/$mpinp \&/' \
@@ -47,6 +47,11 @@ function gen_chainbatch {
     sed -n '/^## generate data by relaxation of random structures using repose/,/^}/p' $chain \
         | sed    -e "/airss.pl/      s/spawn airss.pl/spawn-batch ${opts} -command airss.pl -max \$minima -keep/" \
                  -e '/airss.pl/      s/$seed/$seed \&/ ' \
+		 -e '/SECONDS=0/     i \    jobid=$(cat .spawnpids.* | grep jobid: | head -n 1 | awk "{print $2}")\ ' \
+		 -e '/SECONDS=0/     i \    until [[ ! -z $running ]]; do\ ' \
+		 -e '/SECONDS=0/     i \        running=`squeue -h -j $jobid | awk '"'"'{ if ($5 == "R" && !flag) { flag=1 } } END { print flag }'"'"'`\ ' \
+		 -e '/SECONDS=0/     i \        sleep 5\ ' \
+		 -e '/SECONDS=0/     i \    done\ ' \
                  -e '/despawn/       s/despawn/.\/despawn-batch/' \
                  -e "/crud.pl/       s/spawn-slow/spawn-batch ${opts} -command/" \
                  -e '/crud.pl/       s/$mpinp/$mpinp \&/' \
