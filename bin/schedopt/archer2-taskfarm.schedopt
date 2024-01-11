@@ -73,3 +73,40 @@ nnodes_per_subjob=1
 ncores_per_subjob=4
 mem_per_core=1500
 %endblock forge
+
+
+%block franks
+#SBATCH --job-name=franks
+#SBATCH --time=00:20:00
+#SBATCH --nodes=1
+#SBATCH --tasks-per-node=128
+#SBATCH --cpus-per-task=1
+#SBATCH --array=1-1
+
+#SBATCH --account=e89-camm
+#SBATCH --partition=standard
+#SBATCH --qos=short
+
+ncores_per_node=128
+nnodes_per_subjob=1
+ncores_per_subjob=128
+mem_per_core=1500
+%endblock franks
+
+%block flock
+#SBATCH --job-name=flock
+#SBATCH --time=00:20:00
+#SBATCH --nodes=1
+#SBATCH --tasks-per-node=128
+#SBATCH --cpus-per-task=1
+#SBATCH --array=1-1
+
+#SBATCH --account=e89-camm
+#SBATCH --partition=standard
+#SBATCH --qos=short
+
+ncores_per_node=128
+nnodes_per_subjob=1
+ncores_per_subjob=128
+mem_per_core=1500
+%endblock flock
