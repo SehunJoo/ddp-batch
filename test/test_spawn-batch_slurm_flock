@@ -1,0 +1,34 @@
+#!/bin/bash
+
+set -e
+
+./clean
+
+# Copy schedopt file
+
+schedoptfile="archer2-short.schedopt"
+cp ../bin/schedopt/$schedoptfile .
+
+
+# case 1: multiple small job
+
+sed -i 's/nnodes_per_subjob=[^ ]*/nnodes_per_subjob=1/g' $schedoptfile
+sed -i 's/ncores_per_subjob=[^ ]*/ncores_per_subjob=128/g' $schedoptfile
+
+#ls $seed/$seed*.ddp | flock -ompnp $num_local_cores -p $meanpress -v -q > $seed.eddp 2> flock.out
+
+# test1
+nohup spawn-batch -genjob -despawn -command "ls Li/Li*.ddp | flock -ompnp 128 -p 0 -v -q > Li.eddp 2> flock.out"
+mv jobscript_flock.sh jobscript_flock_test1.sh
+
+# test - bad
+#nohup spawn-batch -genjob -despawn -command ls Li/Li*.ddp | flock -ompnp 128 -p 0 -v -q > Li.eddp 2> flock.out
+#mv jobscript_flock.sh jobscript_flock_1.sh
+
+
+# Comment
+# Note: rediretion cannot be passed into spawn-batch. If you would like to pass the command line with redirections together, please quote the command line. 
+# Note: pipe cannot be passed into spawn-batch. If you would like to pass the command line with pipe together, please quote the command line. 
+
+
+exit 0

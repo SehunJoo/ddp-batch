@@ -1,0 +1,40 @@
+#!/bin/bash
+
+set -e
+
+./clean
+
+# Copy schedopt file
+
+schedoptfile="archer2-short.schedopt"
+cp ../bin/schedopt/$schedoptfile .
+
+
+# case 1: multiple small job
+
+sed -i 's/nnodes_per_subjob=[^ ]*/nnodes_per_subjob=1/g' $schedoptfile
+sed -i 's/ncores_per_subjob=[^ ]*/ncores_per_subjob=4/g' $schedoptfile
+
+nohup spawn-batch -genjob -despawn -command airss.pl -mpinp 4 -step 0 -seed Li -max 600 -build
+
+mv ./jobscript_airss.sh jobscript_airss_1_multiple_small_subjobs.sh
+
+# case 2: single normal job
+
+sed -i 's/nnodes_per_subjob=[^ ]*/nnodes_per_subjob=1/g' $schedoptfile
+sed -i 's/ncores_per_subjob=[^ ]*/ncores_per_subjob=128/g' $schedoptfile
+
+nohup spawn-batch -genjob -despawn -command airss.pl -mpinp 128 -step 0 -seed Li -max 600 -build
+
+mv ./jobscript_airss.sh jobscript_airss_2_single_normal_subjob.sh
+
+# case 3: single large job
+
+sed -i 's/nnodes_per_subjob=[^ ]*/nnodes_per_subjob=4/g' $schedoptfile
+sed -i 's/ncores_per_subjob=[^ ]*/ncores_per_subjob=512/g' $schedoptfile
+
+nohup spawn-batch -genjob -despawn -command airss.pl -mpinp 512 -step 0 -seed Li -max 600 -build
+
+mv ./jobscript_airss.sh jobscript_airss_3_single_large_subjob.sh
+
+exit 0
