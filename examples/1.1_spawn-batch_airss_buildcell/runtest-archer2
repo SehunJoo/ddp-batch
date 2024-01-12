@@ -4,12 +4,17 @@
 
 seed='Li'
 
-cp archer2.schedopt.example test.schedopt
+rm -rf *.schedopt
+cp ../../bin/schedopt/archer2-short.schedopt ./
+
 
 # test 1
-#nohup spawn-batch -despawn -command airss.pl -mpinp 4 -step 0 -seed $seed -max 600 -build &
+#nohup spawn-batch -command airss.pl -mpinp 4 -step 0 -seed $seed -max 100 -build &
 
 # test 2
-nohup spawn-batch -bakres mv -despawn -command airss.pl -mpinp 4 -step 0 -seed $seed -max 600 -build &
+nohup spawn-batch -despawn -command airss.pl -mpinp 4 -step 0 -seed $seed -max 100 -build &
+
+# test 3
+#nohup spawn-batch -bakres mv -despawn -command airss.pl -mpinp 4 -step 0 -seed $seed -max 100 -build &
 
 exit 0

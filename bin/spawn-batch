@@ -305,9 +305,10 @@ echo "    The distirbution of subjobs"
 echo "      subjobs       : $nsubjobs_per_node /node"
 echo "                    : $nsubjobs_per_job /job"
 echo "                    : $nsubjobs_per_array /array"
-echo
 if [[ $mpinp -lt $ncores_per_subjob ]]; then
 echo "      underpopulate : $mpinp_per_node /node out of $ncores_per_subjob_per_node /node" 
+echo
+echo
 fi
 
 
@@ -315,7 +316,7 @@ fi
 
 function genjob {
     
-    echo -e '\n''generate jobscript ...'
+    echo '    generate jobscript ...'
     
     # job script - scheduler options
 
@@ -354,7 +355,9 @@ function genjob {
         echo "mpinp='${mpinp}'"
         echo "export OMP_NUM_THREADS=${ompnp}"
         
-        [[ $program == "airss" ]] && echo "seed='${seed}'"
+        if [[ $program == "airss" ]] || [[ $program = "forge" ]]; then
+            echo "seed='${seed}'"
+        fi
         echo
     ) >> $jobscript
 
@@ -413,7 +416,7 @@ function genjob {
         elif [[ $program == 'forge' ]]
         then
             # forge
-            echo '        ${cmdline}.${jids}.${nodeid}.${i}  < /dev/null \'
+            echo "        ${cmdline}"'.${jids}.${nodeid}.${i}  < /dev/null \'
             echo '                                 > ${seed}/${seed}.${jids}.${nodeid}.${i}.out \'
             echo '                                2> ${seed}/${seed}.${jids}.${nodeid}.${i}.err &'
         elif [[ $program == 'franks' ]] || [[ $program == 'flock' ]]
@@ -560,7 +563,7 @@ function genjob {
 
 function gendespawn {
 
-    echo -e '\n''generate despawn-batch ...'
+    echo '    generate despawn-batch ...'
 
     # delete/cancel job
 
@@ -585,7 +588,7 @@ function gendespawn {
         [[ $sched == 'slurm' ]] && echo '    counter=$(squeue --noheader --job=$jobid --array --user=$USER | wc -l)'
         echo 'done'
         echo
-        echo 'echo "job $jobid has been deleted/cancelled successfully"'
+        echo 'echo "    job $jobid has been deleted/cancelled successfully"'
         echo
         echo 'rm -f ./.bashrc'
         echo
@@ -714,7 +717,7 @@ function gendespawn {
 
 function subjob {
 
-    echo -e '\n''submit jobscript ...'
+    echo '    submit jobscript ...'
 
     [[ $sched == 'sge' ]] && jobid=$(qsub -terse ${jobscript} | awk 'BEGIN{FS="."}; {print $1}')
     [[ $sched == 'slurm' ]] && jobid=$(sbatch --parsable ${jobscript})
@@ -733,7 +736,7 @@ function subjob {
 
 function monjob {
 
-    echo -e '\n'"monitor the job $jobid ..."
+    echo "    monitor the job $jobid ..."
 
     # monitoring the submitted jobs
 
@@ -765,19 +768,23 @@ function monjob {
 
         # check if the job has been completed
 
-        [[ -f DONE_${jobid} ]] && echo -e '\n    job has been completed ...' && success='true'
+        [[ -f DONE_${jobid} ]] && success='true'
     done
 
     # check if jobs are pending/running
 
     if [[ $success == 'true' ]]
     then
-        [[ $despawn == 'true' ]] && echo -e '\nrun despawn-batch ...' && ./despawn-batch
+        echo -e '\n    job has completed successfully'
+
+        [[ $despawn == 'true' ]] && echo -e '    run despawn-batch ...' && ./despawn-batch
+
+        sleep 1
 
     elif [[ $success == 'false' ]]
     then
 
-        echo '    job is terminated by wall clock limit'
+        echo -e '\n    job is terminated by wall clock limit'
         
         # make sure that the job is terminated
 
@@ -829,12 +836,15 @@ function monjob {
 
         fi
 
-        echo '    resubmit the job'
+        echo -e '    resubmit the job ...\n'
     fi
 }
 
 
 ################################################################################
+
+echo "    spawn-batch starting: $(date)"
+echo
 
 # generate jobscript
 
@@ -856,6 +866,8 @@ then
     fi
 fi
 
-echo 'complete'
+echo
+echo "    spawn-batch complete: $(date)"
+echo
 wait
 exit 0
