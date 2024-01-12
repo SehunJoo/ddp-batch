@@ -10,9 +10,9 @@ rm -rf *.schedopt
 cp $DDPBATCH/schedopt/archer2-short.schedopt ./
 
 # test 1
-nohup spawn-batch -despawn -command forge -mpinp 128 -es 10 -n 200 -nn 5 -np -q -numpot 256 -s ./$seed/$seed &
+nohup spawn-batch -despawn -command forge -ompnp 4 -es 10 -n 200 -nn 5 -np -q -numpot 256 -s ./$seed/$seed &
 
 # test 2
-#nohup spawn-batch -despawn -bakres mv -command forge -mpinp 4 -es 10 -n 200 -nn 5 -np -q -numpot 256 -s ./$seed/$seed &
+#nohup spawn-batch -despawn -bakres mv -command forge -ompnp 4 -es 10 -n 200 -nn 5 -np -q -numpot 256 -s ./$seed/$seed &
 
 exit 0

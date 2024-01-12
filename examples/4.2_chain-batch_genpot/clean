@@ -1,0 +1,9 @@
+#!/bin/bash
+
+ls -I "clean" -I "runtest-*" \
+   -I "Li.cell" \
+   -I "Li.param" \
+   -I "data.res" \
+    | xargs rm -rf
+
+rm -f .spawnpids*

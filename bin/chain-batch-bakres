@@ -569,9 +569,9 @@ function genpot {
     if [[ ${average} == true ]]
     then
        [[ $ncycles -gt 0 ]] && (echo '    ncycles>0 not compatible with mean features' ; exit)
-       spawn-batch -command "frankm $rcut $nbody $npoly $lowexp $highexp $ntrain $nvalid $ntest $deltae $meanpress $nembed 2> /dev/null"
+       spawn-batch -despawn -command "frankm $rcut $nbody $npoly $lowexp $highexp $ntrain $nvalid $ntest $deltae $meanpress $nembed 2> /dev/null"
     else
-       spawn-batch -command "franks $rcut $nbody $npoly $lowexp $highexp $ntrain $nvalid $ntest $deltae $meanpress $nembed 2> /dev/null"
+       spawn-batch -despawn -command "franks $rcut $nbody $npoly $lowexp $highexp $ntrain $nvalid $ntest $deltae $meanpress $nembed 2> /dev/null"
     fi
     
     echo '    launching forge ...'
@@ -626,11 +626,11 @@ function genpot {
     
     [[ ${noparity} == true ]] && parityplot='-np -nt' || parityplot=''
     
-    spawn-batch -command "ls $seed/$seed*.ddp | flock -ompnp $ompnp -p $meanpress -v -q $parityplot > $seed.eddp 2> flock.out"
+    spawn-batch -despawn -command "ls $seed/$seed*.ddp | flock -ompnp $ompnp -p $meanpress -v -q $parityplot > $seed.eddp 2> flock.out"
     dir=$(date +%y%m%d-%H%M%S)-flock
     mkdir $dir
     cp flock-* $dir
-    cp -R $seed{,.cell,.param,.eddp} data.res $dir
+    cp -R $seed{,.cell,.param,.eddp} data.res* $dir
     sleep 1
 	    
     [[ ${noparity} == false ]] && ( mkdir -p plots && mv flock-*.* plots )

@@ -1,0 +1,16 @@
+#!/bin/bash
+
+./clean
+
+seed='Li'
+
+mkdir $seed
+
+rm -rf *.schedopt
+cp $DDPBATCH/schedopt/archer2-short.schedopt ./
+
+# test 1
+nohup chain-batch -M 4 -O 4 -f 0 -n 0 -r 5 -P 5 -F 256 -s Li &
+
+
+exit 0

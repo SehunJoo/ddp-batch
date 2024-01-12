@@ -92,7 +92,7 @@ function gen_chainbatch {
                  -e '/flock -ompnp/      a \    dir=$(date +%y%m%d-%H%M%S)-flock' \
                  -e '/flock -ompnp/      a \    mkdir $dir' \
                  -e '/flock -ompnp/      a \    cp flock-* $dir' \
-                 -e '/flock -ompnp/      a \    cp -R $seed{,.cell,.param,.eddp} data.res $dir' \
+                 -e '/flock -ompnp/      a \    cp -R $seed{,.cell,.param,.eddp} data.res* $dir' \
                  -e '/flock -ompnp/      a \    sleep 1' \
         >> $chain.temp
     echo >> $chain.temp

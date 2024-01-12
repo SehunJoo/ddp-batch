@@ -1,0 +1,17 @@
+#!/bin/bash
+
+./clean
+
+seed='Li'
+
+mkdir $seed
+
+cp michael.schedopt.example test.schedopt
+
+# test 1
+nohup spawn-batch -despawn -command forge -mpinp 4 -es 10 -n 200 -nn 5 -np -q -numpot 256 -s ./$seed/$seed &
+
+# test 2
+#nohup spawn-batch -despawn -bakres mv -command forge -mpinp 4 -es 10 -n 200 -nn 5 -np -q -numpot 256 -s ./$seed/$seed &
+
+exit 0
