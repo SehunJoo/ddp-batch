@@ -547,6 +547,9 @@ function genjob {
             echo
             echo 'touch DONE_${jobid}' >> $jobscript
         ) >> $jobscript
+    elif [[ $program == "franks" ]] || [[ $program == "flock" ]]
+    then
+        echo 'touch DONE_${jobid}' >> $jobscript
     fi
 
     echo 'exit 0' >> $jobscript
@@ -841,7 +844,7 @@ genjob && gendespawn
 
 if [[ $genjob != 'true' ]]
 then
-    if [[ $program == 'airss' || $program == 'crud' || $program == 'forge' ]]
+    if [[ $program == 'airss' || $program == 'crud' || $program == 'forge' || $program == 'franks' || $program == 'flock' ]]
     then    
         until [[ $success == 'true' ]]
         do
