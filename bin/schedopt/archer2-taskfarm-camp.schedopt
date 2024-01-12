@@ -6,7 +6,7 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --array=1-32            # Max Jobs Running : 32 # Maximum of 256 nodes in use by any one user at any time
 
-#SBATCH --account=e89-camm
+#SBATCH --account=e89-camp
 #SBATCH --partition=standard
 #SBATCH --qos=taskfarm
 
@@ -28,7 +28,7 @@ mem_per_core=1500      # memory per core in M
 #SBATCH --cpus-per-task=1
 #SBATCH --array=1-32
 
-#SBATCH --account=e89-camm
+#SBATCH --account=e89-camp
 #SBATCH --partition=standard
 #SBATCH --qos=taskfarm
 
@@ -46,7 +46,7 @@ mem_per_core=1500
 #SBATCH --cpus-per-task=1
 #SBATCH --array=1-32
 
-#SBATCH --account=e89-camm
+#SBATCH --account=e89-camp
 #SBATCH --partition=standard
 #SBATCH --qos=taskfarm
 
@@ -64,7 +64,7 @@ mem_per_core=1500
 #SBATCH --cpus-per-task=1
 #SBATCH --array=1-4
 
-#SBATCH --account=e89-camm
+#SBATCH --account=e89-camp
 #SBATCH --partition=standard
 #SBATCH --qos=short
 
@@ -83,7 +83,7 @@ mem_per_core=1500
 #SBATCH --cpus-per-task=1
 #SBATCH --array=1-1
 
-#SBATCH --account=e89-camm
+#SBATCH --account=e89-camp
 #SBATCH --partition=standard
 #SBATCH --qos=short
 
@@ -101,7 +101,7 @@ mem_per_core=1500
 #SBATCH --cpus-per-task=1
 #SBATCH --array=1-1
 
-#SBATCH --account=e89-camm
+#SBATCH --account=e89-camp
 #SBATCH --partition=standard
 #SBATCH --qos=short
 

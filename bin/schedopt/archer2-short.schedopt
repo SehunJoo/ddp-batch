@@ -67,7 +67,7 @@ mem_per_core=1500
 
 ncores_per_node=128
 nnodes_per_subjob=1
-ncores_per_subjob=128
+ncores_per_subjob=4
 mem_per_core=1500
 %endblock forge
 

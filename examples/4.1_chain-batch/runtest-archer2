@@ -4,10 +4,11 @@
 
 seed='Li'
 
-cp archer2.schedopt.example test.schedopt
+rm -rf *.schedopt
+cp ../../bin/schedopt/archer2-short.schedopt ./
 
 # test 1
-nohup chain-batch -M 4 -f 500 -m 50 -n 5 -r 5 -P 5 -F 256 -s Li &
+nohup chain-batch -M 4 -f 500 -m 50 -n 5 -r 5 -P 5 -F 256 -d 0.1 -s Li &
 
 
 exit 0
