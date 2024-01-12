@@ -626,7 +626,7 @@ function genpot {
     
     [[ ${noparity} == true ]] && parityplot='-np -nt' || parityplot=''
     
-    spawn-batch -command "ls $seed/$seed*.ddp | flock -ompnp $ompnps -p $meanpress -v -q $parityplot > $seed.eddp 2> flock.out"
+    spawn-batch -command "ls $seed/$seed*.ddp | flock -ompnp $ompnp -p $meanpress -v -q $parityplot > $seed.eddp 2> flock.out"
     dir=$(date +%y%m%d-%H%M%S)-flock
     mkdir $dir
     cp flock-* $dir

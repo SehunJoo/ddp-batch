@@ -87,7 +87,7 @@ function gen_chainbatch {
                  -e '/let gotpot/        i \    grep -L powers $seed/$seed*.ddp | xargs rm -f' \
                  -e '/let gotpot/        i \    ls $seed/$seed*.ddp | shuf | head -n -$minpot | xargs -r rm' \
 		         -e '/flock -ompnp/      s/ssh -x $remotenode "cd $rootdir ; /spawn-batch -command "/ ' \
-		         -e '/flock -ompnp/      s/remotecore/ompnp/ ' \
+		         -e '/flock -ompnp/      s/remotecores/ompnp/ ' \
                  -e '/flock -ompnp/      a \    dir=$(date +%y%m%d-%H%M%S)-flock' \
                  -e '/flock -ompnp/      a \    mkdir $dir' \
                  -e '/flock -ompnp/      a \    cp flock-* $dir' \
