@@ -417,7 +417,7 @@ function relaxandjiggle {
 	    counter=`ls $seed-*.res 2> /dev/null | wc -l`
         nfail=$(ls trash/*.err 2> /dev/null | wc -l) 
         ntrial=$((counter + nfail)) 
-	    echo -n -e "\r\033[0K    "$counter" structures"
+	    echo -n -e "\r\033[0K    "$counter" structures"" (# trials: $ntrial)"
     done
     echo
 

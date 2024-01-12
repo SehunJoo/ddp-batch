@@ -55,6 +55,7 @@ function gen_chainbatch {
                  -e '/SECONDS/       s/SECONDS/ntrial/' \
                  -e '/counter=`/     a \        nfail=$(ls trash/*.err 2> /dev/null | wc -l)\ ' \
                  -e '/counter=`/     a \        ntrial=$((counter + nfail))\ ' \
+                 -e '/echo -n -e/    s/$/" (# trials: $ntrial)"/' \
                  -e '/despawn/       s/despawn/.\/despawn-batch/' \
                  -e '$               i \    rm -rf trash' \
         >> $chain.temp
