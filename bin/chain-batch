@@ -635,9 +635,9 @@ function genpot {
 	    
     [[ ${noparity} == false ]] && ( mkdir -p plots && mv flock-*.* plots )
     
-    cat embed.data >> $seed.eddp
+    [[ $nembed != 0 ]] && cat embed.data >> $seed.eddp
     
-    rm embed.data
+    [[ $nembed != 0 ]] && rm embed.data
    
 	 cat flock.out
 

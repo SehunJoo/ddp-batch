@@ -641,10 +641,10 @@ function gendespawn {
     fi
 
     echo 'mkdir -p jobinfo' >> despawn-batch
-    echo "mv -f ${jobscript}                 jobinfo 2>/dev/null" >> despawn-batch
-    echo 'mv -f .spawnpids* .fail.spawnpids* jobinfo 2>/dev/null' >> despawn-batch
-    echo 'mv -f $program.{e,o,pe,po}*        jobinfo 2>/dev/null' >> despawn-batch
-    echo 'mv -f slurm-*.out                  jobinfo 2>/dev/null' >> despawn-batch
+    echo "mv -f ${jobscript}                   jobinfo 2>/dev/null" >> despawn-batch
+    echo 'mv -f .spawnpids* .fail.spawnpids*   jobinfo 2>/dev/null' >> despawn-batch
+    echo 'mv -f $program.{e,o,pe,po}${jobid}*  jobinfo 2>/dev/null' >> despawn-batch
+    echo 'mv -f slurm-*.out                    jobinfo 2>/dev/null' >> despawn-batch
 
     # backup data - job-related files
 
