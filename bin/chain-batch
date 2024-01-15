@@ -36,7 +36,7 @@ function usage {
     echo '   -A             mean features - no active learning'
     echo '   -x natexp      energy normalisation natom exponent (default 0.5)'
     echo '   -u nembed      size of composition embedding space (0)'
-    echo '   -X             no nearly stopping'
+    echo '   -X             no early stopping'
     echo '   -Q             no parity plots'
     echo '   -k             keep intermediate files'
     echo '   -e             send email to address when completed'
@@ -57,7 +57,7 @@ full=1000
 minima=100
 nbest=1
 deviation=0.0
-waitseconds=600
+waitseconds=60
 jiggles=10
 Jiggles=100
 amp=0.02
@@ -635,9 +635,7 @@ function genpot {
 	    
     [[ ${noparity} == false ]] && ( mkdir -p plots && mv flock-*.* plots )
     
-    [[ $nembed != 0 ]] && cat embed.data >> $seed.eddp
-    
-    [[ $nembed != 0 ]] && rm embed.data
+    [[ -f embed.data ]] &&  ( cat embed.data >> $seed.eddp ; rm -f embed.data )
    
 	 cat flock.out
 
