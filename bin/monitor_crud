@@ -1,0 +1,52 @@
+#!/bin/bash
+
+set -e
+
+if [ $# -ne 1 ]; then
+    echo 1>&2 "Usage: $(basename $0) <jobid>"
+    exit 127
+fi
+
+# Get arguments
+
+jobid=$1
+
+
+# Check the number of random structure left (./hobber/*.res files)'
+
+echo "    starting crud monitoring ..."
+
+touch ./status.crud.${jobid}
+
+counter=1
+
+until [[ ${counter} -eq 0 ]]
+do
+    sleep 5
+
+    counter=$(find . ./hopper -maxdepth 1 -type f -name "*.res" | sed "/data.res/d" | wc -l)
+
+    sed -i "/check_time/d"                                      ./status.crud.${jobid}
+    sed -i "/no. structures/d"                                  ./status.crud.${jobid}
+    echo "check_time:         $(date +%Y-%m-%d\ %H:%M:%S)"   >> ./status.crud.${jobid}
+    echo "no. structures:     ${counter}"                    >> ./status.crud.${jobid}
+
+    SECONDS=0
+    until [[ $SECONDS -ge 5 ]]
+    do
+        [[ -f ./stopmonitor ]] && echo '    stopping crud monitoring ...' && exit 0
+        [[ -f ./STOP        ]] && echo '    stopping crud monitoring ...' && exit 0
+        sleep 1
+    done
+done
+
+sleep 1
+
+
+# Create a DONE file to signal that the job is done
+
+touch ./done.crud
+
+echo '    crud complete'
+
+exit 0

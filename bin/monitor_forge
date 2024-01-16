@@ -1,0 +1,54 @@
+#!/bin/bash
+
+set -e
+
+if [ $# -ne 3 ]; then
+    echo 1>&2 "Usage: $(basename $0) <jobid> <seed> <numpot>"
+    exit 127
+fi
+
+# Get arguments
+
+jobid=$1
+seed=$2
+numpot=$3
+
+
+# check the number of potential generated (./$seed/*.ddp files)'
+
+echo "    starting forge monitoring ..."
+
+touch ./status.forge.${jobid}
+
+counter=0
+counterddp=0
+
+until [[ $counter -ge $numpot || $counterddp -ge $numpot ]]
+do
+    counter=$(grep "testing:   testing" ${seed}/*.out 2> /dev/null | wc -l)
+    counterddp=$(ls ${seed}/*.ddp 2> /dev/null | wc -l)
+
+    sed -i "/check_time/d"                                     ./status.forge.${jobid}
+    sed -i "/no. potentials/d"                                 ./status.forge.${jobid}
+    echo "check_time:         $(date +%Y-%m-%d\ %H:%M:%S)"  >> ./status.forge.${jobid}
+    echo "no. potentials:     ${counterddp}"                >> ./status.forge.${jobid}
+
+    SECONDS=0
+    until [[ $SECONDS -ge 5 ]]
+    do
+        [[ -f ./stopmonitor ]] && echo '    stopping forge monitoring ...' && exit 0
+        [[ -f ./STOP        ]] && echo '    stopping forge monitoring ...' && exit 0
+        sleep 1
+    done
+done
+
+sleep 1
+
+
+# Create a DONE file to signal that the job is done
+
+touch ./done.forge
+
+echo '    forge complete'
+
+exit 0

@@ -6,12 +6,17 @@ seed='Li'
 
 tar -xvzf hopper.tar.gz &> /dev/null
 
-cp archer2.schedopt.example test.schedopt
+rm -rf *.schedopt
+cp $DDPBATCH/schedopt/archer2-short.schedopt .
+
+sed -i 's/--nodes=8/--nodes=1/g' *.schedopt
+sed -i 's/--array=1-4/--array=1-4/g' *.schedopt
+sed -i 's/ncores_per_subjob=128/ncores_per_subjob=4/g' *.schedopt
 
 # test 1
-#nohup spawn-batch -despawn -command crud.pl -mpinp 4 &
+nohup spawn-batch -despawn -command crud.pl -mpinp 4 &
 
 # test 2
-nohup spawn-batch -bakres mv -despawn -command crud.pl -mpinp 4 &
+#nohup spawn-batch -bakres mv -despawn -command crud.pl -mpinp 4 &
 
 exit 0

@@ -7,10 +7,14 @@ seed='Li'
 rm -rf *.schedopt
 cp $DDPBATCH/schedopt/archer2-short.schedopt .
 
+sed -i 's/--nodes=8/--nodes=1/g' *.schedopt
+sed -i 's/--array=1-4/--array=1-4/g' *.schedopt
+sed -i 's/ncores_per_subjob=128/ncores_per_subjob=4/g' *.schedopt
+
 # test 1
-#nohup spawn-batch -despawn -command airss.pl -mpinp 4 -step 0 -seed $seed -max 600 &
+nohup spawn-batch -despawn -command airss.pl -mpinp 4 -step 0 -seed $seed -max 200 &
 
 # test 2
-nohup spawn-batch -bakres mv -despawn -command airss.pl -mpinp 4 -step 0 -seed $seed -max 600 &
+#nohup spawn-batch -bakres mv -despawn -command airss.pl -mpinp 4 -step 0 -seed $seed -max 600 &
 
 exit 0

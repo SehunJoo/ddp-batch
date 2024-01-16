@@ -1,0 +1,51 @@
+#!/bin/bash
+
+if [ $# -ne 2 ]; then
+    echo 1>&2 "Usage: $(basename $0) <scheduler> <jobid>"
+    echo 1>&2 "    scheduler: sge | slurm"
+    echo 1>&2 "    jobid: ID of the job"
+    echo 1>&2
+    exit 127
+fi
+
+sched=$1
+jobid=$2
+counter=1
+
+
+echo "    starting job ${jobid} monitoring ..."
+
+touch ./status.${jobid}
+
+sleep 10
+
+until [[ $counter -eq 0 ]]
+do
+    # count the number of jobs
+
+    [[ $sched == 'sge' ]] && qstat -u $USER -g d | grep $jobid > ./status.${jobid}
+    [[ $sched == 'slurm' ]] && squeue --noheader --job=$jobid --array --user=$USER > ./status.${jobid}
+
+    exit_status=$?
+
+    if [[ $exit_status -eq 0 ]]; then
+        counter=$(cat ./status.${jobid} | wc -l)
+        #echo -e -n "\r    ${counter} jobs pending/running"
+    else
+        echo 'scheduler command failed, it will be tried in 5 minutes ...'
+    fi
+
+    SECONDS=0
+    until [[ $SECONDS -ge 600 ]]
+    do
+        [[ -f ./stopmonitor ]] && echo "    stopping job ${jobid} monitoring ..." && exit 0
+        [[ -f ./STOP        ]] && echo "    stopping job ${jobid} monitoring ..." && exit 0
+        sleep 1
+    done
+done
+
+touch done.${jobid}
+
+echo '    job ${jobid} complete'
+
+exit 0

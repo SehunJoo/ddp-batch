@@ -307,8 +307,6 @@ echo "                    : $nsubjobs_per_job /job"
 echo "                    : $nsubjobs_per_array /array"
 if [[ $mpinp -lt $ncores_per_subjob ]]; then
 echo "      underpopulate : $mpinp_per_node /node out of $ncores_per_subjob_per_node /node" 
-echo
-echo
 fi
 
 
@@ -316,7 +314,7 @@ fi
 
 function genjob {
     
-    echo '    generate jobscript ...'
+    echo '    generating jobscript ...'
     
     # job script - scheduler options
 
@@ -352,6 +350,7 @@ function genjob {
         echo 'jids="${jobid}.${taskid}"'
         echo 'prefix=".spawnpids"'
         echo
+        echo "program='${program}'"
         echo "mpinp='${mpinp}'"
         echo "export OMP_NUM_THREADS=${ompnp}"
         
@@ -424,6 +423,7 @@ function genjob {
             # franks & flock
             echo "        ${cmdline}"
         else
+            # others
             echo "        ${cmdline} < /dev/null >& /dev/null &"
         fi
 
@@ -438,132 +438,29 @@ function genjob {
         echo '    done'
         echo 'done'
         echo
+        echo 'wait'
         echo 'sleep 5'
         echo
     ) >> $jobscript
 
     # job script - monitor jobs
     
-    if [[ $program == "airss" ]]
-    then
-        (
-            echo "# check the number of random structure generated (./*.res files)"
-            echo
-            echo 'tsec_start=$(date +%s)'
-            echo 
-            echo 'counter=0'
-            echo "max='${max}'"
-            echo 
-            echo 'until [[ $counter -ge $max ]]'
-            echo 'do'
-            echo '    sleep 1'
-            echo 
-            echo '    counter=$(find . -maxdepth 1 -type f -name "$seed-*.res" 2> /dev/null | sed "/data.res/d" | xargs grep --no-filename TITL 2> /dev/null | wc -l)'
-            echo 
-            echo '    t_check=$(date +%Y-%m-%d\ %H:%M:%S)'
-            echo '    tsec_check=$(date +%s)'
-            echo '    tsec_run=$((${tsec_check} - ${tsec_start}))'
-            echo '    rt_h=$(( ${tsec_run}/3600 ))'
-            echo '    rt_m=$(( (${tsec_run}/60) - (${rt_h}*60) ))'
-            echo '    rt_s=$(( ${tsec_run} - (${tsec_run}/60)*60 ))'
-            echo 
-            echo '    sed -i "/check_time/d"                                    ${prefix}.${jids}'
-            echo '    sed -i "/run_time/d"                                      ${prefix}.${jids}'
-            echo '    sed -i "/no. structures/d"                                ${prefix}.${jids}'
-            echo '    echo "check_time:         ${t_check}"                  >> ${prefix}.${jids}'
-            echo '    echo "run_time:           ${rt_h}:${rt_m}:${rt_s}"     >> ${prefix}.${jids}'
-            echo '    echo "no. structures:     ${counter}"                  >> ${prefix}.${jids}'
-            echo 'done'
-            echo 
-            echo 'sleep 5'
-            echo
-            echo 'touch DONE_${jobid}' >> $jobscript
-        ) >> $jobscript
-    elif [[ $program == "crud" ]]
-    then
-        (
-            echo '# check the number of random structure left (./hobber/*.res files)'
-            echo
-            echo 'tsec_start=$(date +%s)'
-            echo 
-            echo 'counter=1'
-            echo
-            echo "until [[ \${counter} -lt ${nsubjobs_per_array} ]]"
-            echo 'do'
-            echo '    sleep 1'
-            echo 
-            echo '    counter=$(find . ./hopper -maxdepth 1 -type f -name "*.res" | sed "/data.res/d" | wc -l)'
-            echo
-            echo '    t_check=$(date +%Y-%m-%d\ %H:%M:%S)'
-            echo '    tsec_check=$(date +%s)'
-            echo '    tsec_run=$((${tsec_check} - ${tsec_start}))'
-            echo '    rt_h=$(( ${tsec_run}/3600 ))'
-            echo '    rt_m=$(( (${tsec_run}/60) - (${rt_h}*60) ))'
-            echo '    rt_s=$(( ${tsec_run} - (${tsec_run}/60)*60 ))'
-            echo 
-            echo '    sed -i "/check_time/d"                                     ${prefix}.${jids}'
-            echo '    sed -i "/run_time/d"                                       ${prefix}.${jids}'
-            echo '    sed -i "/no. structures/d"                                 ${prefix}.${jids}'
-            echo '    echo "check_time:         ${t_check}"                   >> ${prefix}.${jids}'
-            echo '    echo "run_time:           ${rt_h}:${rt_m}:${rt_s}"      >> ${prefix}.${jids}'
-            echo '    echo "no. structures:     ${counter}"                   >> ${prefix}.${jids}'
-            echo 'done'
-            echo 
-            echo 'sleep 5'
-            echo 
-            echo 'wait'
-            echo 
-            echo 'counter=$(find . ./hopper -maxdepth 1 -type f -name "*.res" | sed "/data.res/d" | wc -l)'
-            echo '[[ ${counter} -eq 0 ]] && touch DONE_${jobid}'
-            echo
-        ) >> $jobscript
-    elif [[ $program == "forge" ]]
-    then
-        (
-            echo '# check the number of potential generated (./$seed/*.ddp files)'
-            echo
-            echo 'tsec_start=$(date +%s)'
-            echo 
-            echo 'counter=0'
-            echo 'counterddp=0'
-            echo "numpot='${numpot}'"
-            echo
-            echo 'until [[ $counter -ge $numpot || $counterddp -ge $numpot ]]'
-            echo 'do'                
-            echo '    counter=$(grep "testing:   testing" ${seed}/*.out | wc -l)'
-            echo '    counterddp=$(ls ${seed}/*.ddp | wc -l)'
-            echo
-            echo '    t_check=$(date +%Y-%m-%d\ %H:%M:%S)'
-            echo '    tsec_check=$(date +%s)'
-            echo '    tsec_run=$((${tsec_check} - ${tsec_start}))'
-            echo '    rt_h=$(( ${tsec_run}/3600 ))'
-            echo '    rt_m=$(( (${tsec_run}/60) - (${rt_h}*60) ))'
-            echo '    rt_s=$(( ${tsec_run} - (${tsec_run}/60)*60 ))'
-            echo 
-            echo '    sed -i "/check_time/d"                                     ${prefix}.${jids}'
-            echo '    sed -i "/run_time/d"                                       ${prefix}.${jids}'
-            echo '    sed -i "/no. potentials/d"                                 ${prefix}.${jids}' 
-            echo '    echo "check_time:         ${t_check}"                   >> ${prefix}.${jids}'   
-            echo '    echo "run_time:           ${rt_h}:${rt_m}:${rt_s}"      >> ${prefix}.${jids}'
-            echo '    echo "no. potentials:     ${counterddp}"                >> ${prefix}.${jids}'
-            echo 'done'
-            echo
-            echo 'touch DONE_${jobid}' >> $jobscript
-        ) >> $jobscript
-    elif [[ $program == "franks" ]] || [[ $program == "flock" ]]
-    then
-        echo 'touch DONE_${jobid}' >> $jobscript
+    if [[ $program == "airss" ]] || [[ $program == "crud" ]] || [[ $program == "forge" ]]; then
+        echo >> $jobscript
+    else
+        echo 'touch done.${program}' >> $jobscript
     fi
 
     echo 'exit 0' >> $jobscript
 }
 
 
+
 ## generate despwan file
 
 function gendespawn {
 
-    echo '    generate despawn-batch ...'
+    echo '    generating despawn-batch ...'
 
     # delete/cancel job
 
@@ -575,76 +472,33 @@ function gendespawn {
         echo "program='${program}'"
         echo "jobid=\$(cat .spawnpids.* | grep jobid: | head -n 1 | awk '{print \$2}')"
         echo
-        echo 'touch DONE_${jobid}'
+        [[ $sched == 'sge'   ]] && echo '[[ ! -f done.${jobid} ]] && qdel ${jobid} && echo "    stopping job ${jobid} ..."'
+        [[ $sched == 'slurm' ]] && echo '[[ ! -f done.${jobid} ]] && scancel ${jobid} && echo "    stopping job ${jobid} ..."'
         echo
-        [[ $sched == 'sge'   ]] && echo 'qdel ${jobid}'
-        [[ $sched == 'slurm' ]] && echo 'scancel ${jobid}'
+        echo 'touch stopspawn'
+        echo 'touch stopmonitor'
         echo
-        echo 'counter=1'
-        echo 'until [[ $counter -eq 0 ]]'
-        echo 'do'
-        echo '    sleep 1'
-        [[ $sched == 'sge'   ]] && echo '    counter=$(qstat -u $USER -g d | grep $jobid | wc -l)'
-        [[ $sched == 'slurm' ]] && echo '    counter=$(squeue --noheader --job=$jobid --array --user=$USER | wc -l)'
-        echo 'done'
-        echo
-        echo 'echo "    job $jobid has been deleted/cancelled successfully"'
-        echo
-        echo 'rm -f ./.bashrc'
-        echo
-        echo
-    ) > despawn-batch
-
-    # update job information in .spawpids.* files
-
-    (
-        echo '# update job information in .spawnpids.* files'
-        echo
-        echo 't_end=$(date +%Y-%m-%d\ %H:%M:%S)'
+        echo 'sleep 10'
         echo
         echo 'for spawnfile in .spawnpids.*'
         echo 'do'
-        echo '    echo "end_time:           ${t_end}"                     >> $spawnfile'
+        echo '    echo "end_time:           $(date +%Y-%m-%d\ %H:%M:%S)"  >> $spawnfile'
         echo 'done'
         echo
-    ) >> despawn-batch
+        echo 'mkdir -p jobinfo'
+        echo "mv -f ${jobscript}                   jobinfo 2>/dev/null"
+        echo 'mv -f .spawnpids* .fail.spawnpids*   jobinfo 2>/dev/null'
+        echo 'mv -f $program.{e,o,pe,po}${jobid}*  jobinfo 2>/dev/null'
+        echo 'mv -f slurm-*.out                    jobinfo 2>/dev/null'
+        echo 'mv -f status.*                       jobinfo 2>/dev/null'
+        echo 'mv -f done.*                         jobinfo 2>/dev/null'
+        echo
+        echo 'rm -f stopspawn stopmonitor'
+        echo 'rm -f ./.bashrc'
+        echo
+    ) > despawn-batch
 
-    if [[ $program == 'airss' ]] || [[ $program == 'crud' ]]
-    then
-        (
-            echo "seed='${seed}'"
-            [[ $program == 'airss' ]] && echo 'counter=$(find . -maxdepth 1 -type f -name "$seed-*.res" 2> /dev/null | sed "/data.res/d" | xargs grep --no-filename TITL 2> /dev/null | wc -l)'
-            [[ $program == 'crud'  ]] && echo 'counter=$(find . ./hopper -maxdepth 1 -type f -name "*.res" | sed "/data.res/d" | wc -l)'
-            echo
-            echo 'for spawnfile in .spawnpids.*'
-            echo 'do'
-            echo '    sed -i "/no. structures/d"                                $spawnfile'
-            echo '    echo "no. structures:     ${counter}"                  >> $spawnfile'
-            echo 'done'
-            echo
-            echo
-        ) >> despawn-batch
-    elif [[ $program == 'forge' ]]
-    then
-        (
-            echo "seed='${seed}'"
-            echo 'counter=$(ls ${seed}/*.ddp | wc -l)'
-            echo
-            echo 'for spawnfile in .spawnpids.*'
-            echo 'do'
-            echo '    sed -i "/no. potentials/d"                                $spawnfile'
-            echo '    echo "no. potentials:     ${counter}"                  >> $spawnfile'
-            echo 'done'
-            echo
-            echo
-        ) >> despawn-batch
-    fi
 
-    echo 'mkdir -p jobinfo' >> despawn-batch
-    echo "mv -f ${jobscript}                   jobinfo 2>/dev/null" >> despawn-batch
-    echo 'mv -f .spawnpids* .fail.spawnpids*   jobinfo 2>/dev/null' >> despawn-batch
-    echo 'mv -f $program.{e,o,pe,po}${jobid}*  jobinfo 2>/dev/null' >> despawn-batch
-    echo 'mv -f slurm-*.out                    jobinfo 2>/dev/null' >> despawn-batch
 
     # backup data - job-related files
 
@@ -706,6 +560,7 @@ function gendespawn {
     fi
 
     echo 'wait' >> despawn-batch
+    echo 'echo -e "\n    despawn-batch complete: $(date)\n"' >> despawn-batch
     echo 'exit 0' >> despawn-batch
 
     chmod 777 despawn-batch
@@ -717,7 +572,7 @@ function gendespawn {
 
 function subjob {
 
-    echo '    submit jobscript ...'
+    echo '    submitting jobscript ...'
 
     [[ $sched == 'sge' ]] && jobid=$(qsub -terse ${jobscript} | awk 'BEGIN{FS="."}; {print $1}')
     [[ $sched == 'slurm' ]] && jobid=$(sbatch --parsable ${jobscript})
@@ -732,142 +587,133 @@ function subjob {
     ) > .spawnpids.$jobid
 }
 
+
+
 ## monitor job
 
 function monjob {
 
-    echo "    monitor the job $jobid ..."
+    echo "    monitoring job ..."
 
-    # monitoring the submitted jobs
+    # monitor the status of the submitted jobs
 
-    counter=1
+    jobrunning='true'
     success='false'
-    repeat=12
 
-    until [[ $repeat -eq 0 ]] || [[ $success == 'true' ]]
+    echo
+
+    monitor_job ${sched} ${jobid} &
+
+    [[ $program == "airss" ]] && monitor_airss $jobid $seed $max &
+    [[ $program == "crud" ]] && monitor_crud $jobid &
+    [[ $program == "forge" ]] && monitor_forge $jobid $seed $numpot &
+
+    until [[ $jobrunning == 'false' ]] || [[ $success == 'true' ]]
     do
-        sleep 5
-
-        # count the number of jobs
-
-        [[ $sched == 'sge' ]] && counter=$(qstat -u $USER -g d | grep $jobid | wc -l)
-        [[ $sched == 'slurm' ]] && counter=$(squeue --noheader --job=$jobid --array --user=$USER | wc -l)
-
-        if [[ $counter -eq 0 ]]
-        then
-            repeat=$(( $repeat - 1 ))
-        else
-            repeat=12
-        fi
-
-        echo -e -n "\r    ${counter} jobs pending/running"
-
-        # check if STOP file is created
-
-        [[ -f './STOP' ]] && echo -e '\n    stopping spawn-batch ...' && ./despawn-batch && exit 0
-
-        # check if the job has been completed
-
-        [[ -f DONE_${jobid} ]] && success='true'
-    done
-
-    # check if jobs are pending/running
-
-    if [[ $success == 'true' ]]
-    then
-        echo -e '\n    job has completed successfully'
-
-        [[ $despawn == 'true' ]] && echo -e '    run despawn-batch ...' && ./despawn-batch
-
         sleep 1
 
-    elif [[ $success == 'false' ]]
-    then
+        [[ -f ./done.${jobid} ]] && jobrunning='false'
+        [[ -f ./done.${program} ]] && success='true'
 
+        [[ -f './stopspawn' ]] && echo -e '\n    stopping spawn-batch ...' && exit 0
+        [[ -f './STOP' ]] && echo -e '\n    stopping spawn-batch ...' && ./despawn-batch && exit 0
+    done
+
+    # stop monitoring
+
+    touch ./stopmonitor && sleep 5 && rm -f ./stopmonitor
+
+    # check if job is completed
+
+    if [[ $success == 'true' ]]; then
+        echo -e "\n    ${program} has completed successfully"
+    elif [[ $success == 'false' ]] && [[ $jobrunning == 'false' ]]; then
         echo -e '\n    job is terminated by wall clock limit'
-        
-        # make sure that the job is terminated
+    else
+        echo -e '\n    check errors' && ./despawn-batch && exit 0
+    fi
+}
 
-        [[ $sched == 'sge' ]] && qdel $jobid
-        [[ $shced == 'slurm' ]] && scancel $jobid
 
-        rename '.spawnpids' '.fail.spawnpids' .spawnpids.*
 
-        # clean up intermediate result files where calculations are not fully completed
+## clean the intermediate result files before resubmitting the job
 
-        if [[ $program == 'airss' ]]
+function resetjob {
+
+
+    rename '.spawnpids' '.fail.spawnpids' .spawnpids.*
+
+    # clean up intermediate result files where calculations are not fully completed
+
+    if [[ $program == 'airss' ]]
+    then
+        for f in $(ls $seed-*.cell)
+        do
+            seedairss=${f%%.cell}
+            [[ ! -f $seedairss.res ]] && ls $seedairss.* | xargs rm -f
+        done
+
+    elif [[ $program == 'crud' ]]
+    then
+        # for failure due to bad castep
+        if [[ -d bad_castep ]]
         then
-            for f in $(ls $seed-*.cell)
-            do
-                seedairss=${f%%.cell}
-                [[ ! -f $seedairss.res ]] && ls $seedairss.* | xargs rm -f
-            done
-
-        elif [[ $program == 'crud' ]]
+            rm -f bad_castep/*.{cell,param,castep}
+            find . ./bad_castep -maxdepth 1 -type f -name "*.res" | sed '/data.res/d' | xargs mv -t ./hopper
+        fi
+        # for the incomplete calculation stopped during running
+        if ls *.castep &>/dev/null
         then
-            # for failure due to bad castep
-            if [[ -d bad_castep ]]
-            then
-                rm -f bad_castep/*.{cell,param,castep}
-                find . ./bad_castep -maxdepth 1 -type f -name "*.res" | sed '/data.res/d' | xargs mv -t ./hopper
-            fi
-            # for the incomplete calculation stopped during running
-            if ls *.castep &>/dev/null
-            then
-                for castepfile in `ls *.castep`
-                do
-                    seedcrud=${castepfile%%.castep}
-                    echo $seedcrud
-                    castep2res $seedcrud > hopper/$seedcrud.res
-                    rm -f $seedcrud.{cell,param,castep,res}
-                done
-            fi
-            # for the incomplete calculation stopped at the beginning of the calculation
-            for f in $(ls $seed-*.cell)
+            for castepfile in `ls *.castep`
             do
-                seedcrud=${f%%.cell}
-                if [[ -f $seedcrud.res ]]; then
-                    mv $seedcrud.res ./hopper
-                else
-                    cabal cell res < $seedcrud.cell > ./hopper/$seedcrud.res
-                fi
+                seedcrud=${castepfile%%.castep}
+                echo $seedcrud
+                castep2res $seedcrud > hopper/$seedcrud.res
                 rm -f $seedcrud.{cell,param,castep,res}
             done
-
         fi
+        # for the incomplete calculation stopped at the beginning of the calculation
+        for f in $(ls $seed-*.cell)
+        do
+            seedcrud=${f%%.cell}
+            if [[ -f $seedcrud.res ]]; then
+                mv $seedcrud.res ./hopper
+            else
+                cabal cell res < $seedcrud.cell > ./hopper/$seedcrud.res
+            fi
+            rm -f $seedcrud.{cell,param,castep,res}
+        done
 
-        echo -e '    resubmit the job ...\n'
     fi
 }
 
 
 ################################################################################
+# Main
+################################################################################
 
-echo "    spawn-batch starting: $(date)"
-echo
+echo -e "\n    spawn-batch starting: $(date)\n"
 
 # generate jobscript
 
 genjob && gendespawn
+[[ $genjob == 'true' ]] && exit 0
+
 
 # submit jobscript
 
-if [[ $genjob != 'true' ]]
-then
-    if [[ $program == 'airss' || $program == 'crud' || $program == 'forge' || $program == 'franks' || $program == 'flock' ]]
-    then    
-        until [[ $success == 'true' ]]
-        do
-            subjob
-            monjob
-        done
-    else
-        subjob
-    fi
-fi
+until [[ $success == 'true' ]]
+do
+    subjob
+    monjob
+    [[ $success == 'false' ]] && resetjob && echo -e '    resubmitting the job ...\n'
+done
 
-echo
-echo "    spawn-batch complete: $(date)"
-echo
+# clean job
+
+[[ $despawn == 'true' ]] && echo -e '\n    running despawn-batch ...' && ./despawn-batch
+
 wait
+
+echo -e "\n    spawn-batch complete: $(date)\n"
 exit 0

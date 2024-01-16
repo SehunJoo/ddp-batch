@@ -1,0 +1,52 @@
+#!/bin/bash
+
+set -e
+
+if [ $# -ne 3 ]; then
+    echo 1>&2 "Usage: $(basename $0) <jobid> <seed> <max>"
+    exit 127
+fi
+
+# Get arguments
+
+jobid=$1
+seed=$2
+max=$3
+
+
+# Check the number of random structure generated (./*.res files)
+
+echo "    starting airss monitoring ..."
+
+touch ./status.airss.${jobid}
+
+counter=0
+
+until [[ $counter -ge $max ]]
+do
+    counter=$(find . -maxdepth 1 -type f -name "$seed-*.res" 2> /dev/null | sed "/data.res/d" | xargs grep --no-filename TITL 2> /dev/null | wc -l)
+
+    sed -i "/check_time/d"                                      ./status.airss.${jobid}
+    sed -i "/no. structures/d"                                  ./status.airss.${jobid}
+    echo "check_time:         $(date +%Y-%m-%d\ %H:%M:%S)"   >> ./status.airss.${jobid}
+    echo "no. structures:     ${counter}"                    >> ./status.airss.${jobid}
+
+    SECONDS=0
+    until [[ $SECONDS -ge 5 ]]
+    do
+        [[ -f ./stopmonitor ]] && echo '    stopping airss monitoring ...' && exit 0
+        [[ -f ./STOP        ]] && echo '    stopping airss monitoring ...' && exit 0
+        sleep 1
+    done
+done
+
+sleep 1
+
+
+# create a done file to signal that the job is done
+
+touch ./done.airss
+
+echo '    airss complete'
+
+exit 0
