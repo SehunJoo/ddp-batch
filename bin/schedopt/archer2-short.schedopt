@@ -1,20 +1,20 @@
 %block default
-#SBATCH --job-name=default
-#SBATCH --time=00:20:00         # Max Walltime : 20 mins
-#SBATCH --nodes=8               # Max Nodes Per Job : 32
+#SBATCH --job-name=default      ## job name
+#SBATCH --time=00:20:00         ## max walltime : 20 mins
+#SBATCH --nodes=8               ## max nodes per job : 32
 #SBATCH --tasks-per-node=128
 #SBATCH --cpus-per-task=1
-#SBATCH --array=1-4             # Max Jobs Running : 4 # QOSMaxNodePerUserLimit : 32
+#SBATCH --array=1-4             ## max jobs running : 4 # QOSMaxNodePerUserLimit : 32
 
 #SBATCH --account=e89-camm
 #SBATCH --partition=standard
 #SBATCH --qos=short
 
-ncores_per_node=128    # total number of cores on a node (machine-dependent)
-nnodes_per_subjob=1    # total number of nodes you want to allocate to a single subjob
-ncores_per_subjob=128  # total number of cores you want to allocate to a single subjob
-                       # ncores_per_subjob = ncores_per_node * nnodes_per_subjob
-mem_per_core=1500      # memory per core in M
+ncores_per_node=128             ## total number of cores on a node (machine-dependent)
+nnodes_per_subjob=1             ## total number of nodes you want to allocate to a single subjob
+ncores_per_subjob=128           ## total number of cores you want to allocate to a single subjob
+                                ## ncores_per_subjob = ncores_per_node * nnodes_per_subjob
+mem_per_core=1500               ## memory per core in M
 %endblock default
 
 %block airss

@@ -142,7 +142,7 @@ fi
 # Read *.schedopt file and get options for scheduler
 
 optfile=$(ls *.schedopt)
-schedopt=$(cat $optfile  | sed "/^%block ${program}/,/^%endblock ${program}/!d;//d")
+schedopt=$(cat $optfile | sed 's/##[[:print:]]*//g' | sed "/^%block ${program}/,/^%endblock ${program}/!d;//d" )
 [ -z "$schedopt" ] &&  schedopt=$(cat $optfile  | sed '/^%block default/,/^%endblock default/!d;//d')
 
 nonschedopt=$(echo "$schedopt" | sed '/^#/d')
@@ -186,7 +186,7 @@ elif [[ $sched == "slurm" ]]
 then
     # number of cores & nodes (requested) per each job
 
-    sched_ncores_per_node=$(echo "$schedopt" | sed -n '/--tasks-per-node/p' | awk 'BEGIN {FS="--tasks-per-node="} {print $2}')
+    sched_ncores_per_node=$(echo "$nonschedopt" | grep 'ncores_per_node' | awk 'BEGIN {FS="="} {print $2}' | awk '{print $1}')
     sched_nnodes_per_job=$(echo "$schedopt" | sed -n '/--nodes/p' | awk 'BEGIN {FS="--nodes="} {print $2}')
     sched_ncores_per_job=$(echo "$sched_ncores_per_node*$sched_nnodes_per_job" | bc)
 
@@ -206,7 +206,11 @@ nnodes_per_subjob=$(echo "$nonschedopt" | grep 'nnodes_per_subjob' | awk 'BEGIN 
 ncores_per_subjob=$(echo "$nonschedopt" | grep 'ncores_per_subjob' | awk 'BEGIN {FS="="} {print $2}' | awk '{print $1}')
 [[ -z $ncores_per_subjob ]] && ncores_per_subjob=$sched_ncores_per_node
 ncores_per_subjob_per_node=$(( ($ncores_per_subjob + $nnodes_per_subjob - 1) / $nnodes_per_subjob ))
-mpinp_per_node=$(( ($mpinp + $nnodes_per_subjob - 1) / $nnodes_per_subjob )) # for underpopulation
+
+# actual size of subjobs (underpopulation)
+
+np=$(( $mpinp * $ompnp ))
+np_per_node=$(( ($np + $nnodes_per_subjob - 1) / $nnodes_per_subjob ))
 
 mem_per_core=$(echo "$nonschedopt" | grep 'mem_per_core' | awk 'BEGIN {FS="="} {print $2}' | awk '{print $1}')
 mem_per_subjob=$(( $mem_per_core * $ncores_per_subjob_per_node ))
@@ -244,19 +248,28 @@ fi
 
 if [[ $ncores_per_subjob_per_node -gt $sched_ncores_per_node ]]; then
     echo "Warning: number of cores per node for a subjob should be equal or less than the number of cores per node"
-    echo "number of nodes (/node)        : $sched_ncores_per_node"
-    echo "number of nodes (/subjob/node) : $ncores_per_subjob_per_node"
-    exit 127
-fi
-
-if [[ $mpinp_per_node -gt $ncores_per_subjob_per_node ]]; then
-    echo "Warning: mpinp per node should be equal or less than the number of cores per node for a subjob"
-    echo "mpinp (/subjob/node)           : $mpinp_per_node"
+    echo "number of cores (/node)        : $sched_ncores_per_node"
     echo "number of cores (/subjob/node) : $ncores_per_subjob_per_node"
     exit 127
 fi
 
+if [[ $np_per_node -gt $ncores_per_subjob_per_node ]]; then
+    echo "Warning: mpinp/ompnp per node should be equal or less than the number of cores per node for a subjob"
+    echo "mpinp/ompnp (/subjob/node)     : $np_per_node"
+    echo "number of cores (/subjob/node) : $ncores_per_subjob_per_node"
+    exit 127
+fi
 
+if [[ $mpinp -gt 1 ]] && [[ $ompnp -gt 1 ]]; then
+    echo "Warning: hybrid MPI/OpenMP job is not supported"
+    exit 127
+fi
+
+if [[ $ompnp -gt 1 ]] && [[ $nnodes_per_subjob -gt 1 ]]; then
+    echo "Warning: OpenMP job cannot be parallized over multiple nodes"
+    exit 127
+fi
+    
 
 
 echo
@@ -297,16 +310,17 @@ echo "      nodes         : $nnodes_per_subjob /subjob"
 echo "      cores         : $ncores_per_subjob /subjob"
 echo "                    : $ncores_per_subjob_per_node /subjob/node"
 echo "      mpinp         : $mpinp /subjob"
-echo "                    : $mpinp_per_node /subjob/node"
 echo "      ompnp         : $ompnp /subjob"
+echo "      np            : $np /subjob"
+echo "                    : $np_per_node /subjob/node"
 echo "      memory        : ${mem_per_core}M/core"
 echo 
 echo "      * The distirbution of subjobs"
 echo "      subjobs       : $nsubjobs_per_node /node"
 echo "                    : $nsubjobs_per_job /job"
 echo "                    : $nsubjobs_per_array /array"
-if [[ $mpinp -lt $ncores_per_subjob ]]; then
-echo "      underpopulate : $mpinp_per_node /node out of $ncores_per_subjob_per_node /node" 
+if [[ $np -lt $ncores_per_subjob ]]; then
+echo "      underpopulate : $np_per_node /node out of $ncores_per_subjob_per_node /node" 
 fi
 
 
@@ -321,7 +335,14 @@ function genjob {
     (
         echo "#!/bin/bash -l"
         echo
-        echo "${schedopt}"
+        if [[ $sched == 'slurm' ]] && [[ $ompnp -gt 1 ]]
+        then    
+            echo "${schedopt}" \
+            | sed "s/--cpus-per-task[[:print:]]*/--cpus-per-task=${ompnp}/" \
+            | sed "s/--tasks-per-node=[[:print:]]*/--tasks-per-node=${nsubjobs_per_node}/"
+        else
+           echo "${schedopt}"
+        fi
         echo
     ) > $jobscript
 
@@ -366,6 +387,8 @@ function genjob {
         echo '# launch program'
         echo
 
+        echo '# loop over the nodes assigned to the job'
+
         if [[ $sched == 'slurm' ]]
         then
             echo 'nodelist=$(scontrol show hostnames $SLURM_JOB_NODELIST)'
@@ -382,8 +405,6 @@ function genjob {
             echo '    done'
 		    echo '    nodeid=${tempid%,*}'
             echo
-            echo "    for (( i=1; i<=${nsubjobs_per_node}; i++ ))"
-            echo '    do'
 
         elif [[ $sched == 'sge' ]]
         then
@@ -391,39 +412,59 @@ function genjob {
             echo 'do'
             echo '    nodeid=""'
             echo '    nodeid=$(( ni + 1 ))'
+        fi
+            echo '    # loop over subjobs on each node'
             echo "    for (( i=1; i<=${nsubjobs_per_node}; i++ ))"
             echo '    do'
-        fi
-
 
         # command lines for application
 
-        if [[ $program == 'airss' || $program == 'crud' ]]
-        then
-            # airss & crud
-            if [[ $exe == 'castep' ]] && [[ $sched == 'sge'   ]]; then
-                echo "        ${cmdline}"'\'
-                echo "            -launch 'mpirun -np '"' \'
-                echo "            -exec 'castep.mpi' &"
-            elif [[ $exe == 'castep' ]] && [[ $sched == 'slurm' ]]; then
-                echo "        ${cmdline}"' \'
-                echo '            -launch "srun --nodelist=${nodeid} --exact --nodes='"${nnodes_per_subjob}"' --cpus-per-task=1 --mem='"${mem_per_subjob}"'M  --ntasks-per-node='"${mpinp_per_node}"'  --ntasks=" \'
-                echo "            -exec 'castep.mpi' &"
-            elif [[ $exe == 'repose' ]]; then
-                echo "        ${cmdline} &"
-            fi
-        elif [[ $program == 'forge' ]]
-        then
-            # forge
+        # airss & crud - castep
+        if [[ $program == 'airss' || $program == 'crud' ]] && [[ $exe == 'castep' ]]; then
+
+            [[ $sched == 'sge' ]] && launcher='mpirun -np '
+            [[ $sched == 'slurm' ]] && launcher='srun --nodelist=${nodeid} --exact --nodes='"${nnodes_per_subjob}"' --cpus-per-task=1 --mem='"${mem_per_subjob}"'M  --ntasks-per-node='"${np_per_node}"'  --ntasks='
+
+            echo "        ${cmdline}"' \'
+            echo '            -launch "'${launcher}'" \'
+            echo "            -exec 'castep.mpi' &"
+
+        # airss & crud - repose
+        elif [[ $program == 'airss' || $program == 'crud' ]] && [[ $exe == 'repose' ]]; then
+
+            [[ $sched == 'sge' ]] && launcher=''
+            [[ $sched == 'slurm' ]] && launcher=''
+
+            echo "        ${launcher}"' \'
+            echo "        ${cmdline} &"
+
+        # forge - OpenMP
+        elif [[ $program == 'forge' ]]; then
+
+            [[ $sched == 'sge' ]] && launcher=''
+            [[ $sched == 'slurm' ]] && launcher='srun --nodelist=${nodeid} --exact --nodes=1 --ntasks=1 --ntasks-per-node=1 --cpus-per-task='"${np_per_node}"' --mem='"${mem_per_subjob}"'M'
+
+            echo "        ${launcher}"' \'
             echo "        ${cmdline}"'.${jids}.${nodeid}.${i}  < /dev/null \'
             echo '                                 > ${seed}/${seed}.${jids}.${nodeid}.${i}.out \'
             echo '                                2> ${seed}/${seed}.${jids}.${nodeid}.${i}.err &'
-        elif [[ $program == 'franks' ]] || [[ $program == 'flock' ]]
-        then
-            # franks & flock
-            echo "        ${cmdline}"
+
+        # flock - OpenMP
+        elif [[ $program == 'flock' ]]; then
+
+            [[ $sched == 'sge' ]] && launcher=''
+            [[ $sched == 'slurm' ]] && launcher=''
+
+            echo "        ${launcher}"' \'
+            echo "        ${cmdline} &"
+
+        # franks - GNU-parallel
+        elif [[ $program == 'franks' ]]; then
+
+            echo "        ${cmdline} &"
+
+        # others
         else
-            # others
             echo "        ${cmdline} < /dev/null >& /dev/null &"
         fi
 
