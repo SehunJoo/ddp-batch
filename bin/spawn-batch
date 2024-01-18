@@ -433,7 +433,7 @@ function genjob {
         elif [[ $program == 'airss' || $program == 'crud' ]] && [[ $exe == 'repose' ]]; then
 
             [[ $sched == 'sge' ]] && launcher=''
-            [[ $sched == 'slurm' ]] && launcher=''
+            [[ $sched == 'slurm' ]] && launcher='srun --nodelist=${nodeid} --exact --nodes=1 --ntasks=1 --ntasks-per-node=1 --cpus-per-task='"${np_per_node}"' --mem='"${mem_per_subjob}"'M'
 
             echo "        ${launcher}"' \'
             echo "        ${cmdline} &"
