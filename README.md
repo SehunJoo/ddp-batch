@@ -1,6 +1,6 @@
 # ddp-batch
 
-This repository offers specialized scripts designed to facilitate the execution of **_ab initio_ random structure searching ([AIRSS](https://www.mtg.msm.cam.ac.uk/Codes/AIRSS))** package and **ephemeral data derived potential ([EDDP](https://www.mtg.msm.cam.ac.uk/Codes/EDDP))** packages. These scripts are tailored for use with batch queuing systems or job schedulers, specifically the **Sun Grid Engine (SGE)** and **Slurm**, on cluster and high-performance computing (HPC) environments. The provided scripts streamline the process of initializing, managing, and monitoring AIRSS and EDDP tasks, ensuring efficient utilization of the cluster/HPC resources.
+This repository offers specialized scripts designed to facilitate the execution of **_ab initio_ random structure searching ([AIRSS](https://www.mtg.msm.cam.ac.uk/Codes/AIRSS))** package and **ephemeral data derived potential ([EDDP](https://www.mtg.msm.cam.ac.uk/Codes/EDDP))** packages. These scripts are tailored for use with batch queuing systems or job schedulers, specifically the **SLURM** (Simple Linux Utility for Resource Management) and **SGE** (Sun Grid Engine), on cluster and high-performance computing (HPC) environments. The provided scripts streamline the process of initializing, managing, and monitoring AIRSS and EDDP tasks, ensuring efficient utilization of the cluster/HPC resources.
 
 ## Installation
 install the package with:
