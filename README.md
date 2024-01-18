@@ -1,5 +1,7 @@
 # ddp-batch
 
+This repository offers specialized scripts designed to facilitate the execution of **_ab initio_ random structure searching ([AIRSS](https://www.mtg.msm.cam.ac.uk/Codes/AIRSS))** package and **ephemeral data derived potential ([EDDP](https://www.mtg.msm.cam.ac.uk/Codes/EDDP))** packages. These scripts are tailored for use with batch queuing systems or job schedulers, specifically the **Sun Grid Engine (SGE)** and **Slurm**, on cluster and high-performance computing (HPC) environments. The provided scripts streamline the process of initializing, managing, and monitoring AIRSS and EDDP tasks, ensuring efficient utilization of the cluster/HPC resources.
+
 ## Installation
 install the package with:
 
@@ -23,7 +25,7 @@ run setup.sh script:
 ### spawn-batch
 
 - This script can be used to submit multiple jobs to a cluster using a batch queueing system. This script is for creating a job script, submitting the job script, monitoring the job, and resubimtting/killing the job.
-- This script is applicable to all applications, but is specifically designed for use with `airss.pl` and `crud.pl` in  _ab initio_ random structure searching ([AIRSS](https://www.mtg.msm.cam.ac.uk/Codes/AIRSS)) package and `forge` in ephemeral data derived potential ([EDDP](https://www.mtg.msm.cam.ac.uk/Codes/EDDP)) package.
+- This script is applicable to all applications, but is specifically designed for use with `airss.pl` and `crud.pl` in  AIRSS package and `forge` in EDDP package.
 - It creates `jobscript-program.sh` and `despawn-batch` files in the working directory. As soon as a job is started, a `.spawnpid.*` file is created for each subjob. The file contains details of each subjob.
 - It automatically resubmits the job if the job is terminated due to the wall clock limit.
 - For example,
