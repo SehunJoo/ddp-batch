@@ -1,6 +1,6 @@
 # ddp-batch
 
-This repository offers specialized scripts designed to facilitate the execution of **_ab initio_ random structure searching ([AIRSS](https://www.mtg.msm.cam.ac.uk/Codes/AIRSS))** package and **ephemeral data derived potential ([EDDP](https://www.mtg.msm.cam.ac.uk/Codes/EDDP))** packages. These scripts are tailored for use with batch queuing systems or job schedulers, specifically the **Sun Grid Engine (SGE)** and **Slurm**, on cluster and high-performance computing (HPC) environments. The provided scripts streamline the process of initializing, managing, and monitoring AIRSS and EDDP tasks, ensuring efficient utilization of the cluster/HPC resources.
+This repository offers specialized scripts designed to facilitate the execution of **_ab initio_ random structure searching ([AIRSS](https://www.mtg.msm.cam.ac.uk/Codes/AIRSS))** package and **ephemeral data derived potential ([EDDP](https://www.mtg.msm.cam.ac.uk/Codes/EDDP))** packages. These scripts are tailored for use with batch queuing systems or job schedulers, specifically the **SLURM** (Simple Linux Utility for Resource Management) and **SGE** (Sun Grid Engine), on cluster and high-performance computing (HPC) environments. The provided scripts streamline the process of initializing, managing, and monitoring AIRSS and EDDP tasks, ensuring efficient utilization of the cluster/HPC resources.
 
 ## Installation
 install the package with:
@@ -39,3 +39,8 @@ run setup.sh script:
 ### farm-batch
 
 - This script is exactly same as `spawn-batch` script. This script is merely a counterpart to the `farm` script that is included in the EDDP package.
+
+
+## References
+- [Pickard, Ephemeral data derived potentials for random structure search, 2022.](https://doi.org/10.1103/PhysRevB.106.014102)
+- [Salzbrenner et al., Developments and further applications of ephemeral data derived potentials, 2023.](https://doi.org/10.1063/5.0158710)
