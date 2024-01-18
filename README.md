@@ -39,3 +39,8 @@ run setup.sh script:
 ### farm-batch
 
 - This script is exactly same as `spawn-batch` script. This script is merely a counterpart to the `farm` script that is included in the EDDP package.
+
+
+## References
+- [Pickard, Ephemeral data derived potentials for random structure search, 2022.](https://doi.org/10.1103/PhysRevB.106.014102)
+- [Salzbrenner et al., Developments and further applications of ephemeral data derived potentials, 2023.](https://doi.org/10.1063/5.0158710)
