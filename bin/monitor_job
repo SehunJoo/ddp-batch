@@ -26,7 +26,6 @@ do
     [[ $sched == 'sge' ]] && cmdline="qstat -g d -u $USER | grep $jobid"
     [[ $sched == 'slurm' ]] && cmdline="squeue --noheader --job=$jobid --array --user=$USER"
 
-
     $cmdline > ./status.${jobid}
     exit_status=$?
 
