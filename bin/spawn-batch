@@ -71,6 +71,7 @@ while [ $# -ge 1 ] ; do
                 if [[ $(echo $cmdline | sed -n '/-repose/p' | wc -l) -eq 1 ]]; then
                     exe='repose' # airss | crud
                 fi
+
                 shift 1
             elif [[ ${cmdline_quoted} == 'false' ]]
             then
@@ -337,9 +338,10 @@ function genjob {
         echo
         if [[ $sched == 'slurm' ]] && [[ $ompnp -gt 1 ]]
         then    
-            echo "${schedopt}" \
-            | sed "s/--cpus-per-task[[:print:]]*/--cpus-per-task=${ompnp}/" \
-            | sed "s/--tasks-per-node=[[:print:]]*/--tasks-per-node=${nsubjobs_per_node}/"
+            echo "${schedopt}"
+            #echo "${schedopt}" \
+            #| sed "s/--cpus-per-task[[:print:]]*/--cpus-per-task=${ompnp}/" \
+            #| sed "s/--tasks-per-node=[[:print:]]*/--tasks-per-node=${nsubjobs_per_node}/"
         else
            echo "${schedopt}"
         fi
@@ -374,6 +376,9 @@ function genjob {
         echo "program='${program}'"
         echo "mpinp='${mpinp}'"
         echo "export OMP_NUM_THREADS=${ompnp}"
+        if [[ $ompnp -gt 1 ]]; then
+            echo "export OMP_PLACES=cores"
+        fi
         
         if [[ $program == "airss" ]] || [[ $program = "forge" ]]; then
             echo "seed='${seed}'"
@@ -442,7 +447,9 @@ function genjob {
         elif [[ $program == 'forge' ]]; then
 
             [[ $sched == 'sge' ]] && launcher=''
-            [[ $sched == 'slurm' ]] && launcher='srun --nodelist=${nodeid} --exact --nodes=1 --ntasks=1 --ntasks-per-node=1 --cpus-per-task='"${np_per_node}"' --mem='"${mem_per_subjob}"'M'
+            [[ $sched == 'slurm' ]] && [[ $nsubjobs_per_node -eq 1 ]] && launcher='srun --nodelist=${nodeid} --exact --hint=nomultithread --distribution=block:block --nodes=1 --ntasks=1 --ntasks-per-node=1 --cpus-per-task='"${sched_ncores_per_node}"
+            [[ $sched == 'slurma' ]] && launcher='srun --nodelist=${nodeid} --exact --hint=nomultithread --distribution=block:block --nodes=1 --ntasks=1 --ntasks-per-node=1 --cpus-per-task='"${np_per_node}"
+            [[ $sched == 'slurma' ]] && launcher='srun --nodelist=${nodeid} --exact --hint=nomultithread --distribution=block:block --nodes=1 --ntasks=1 --ntasks-per-node=1 --cpus-per-task='"${np_per_node}"' --mem='"${mem_per_subjob}"'M'
 
             echo "        ${launcher}"' \'
             echo "        ${cmdline}"'.${jids}.${nodeid}.${i}  < /dev/null \'
