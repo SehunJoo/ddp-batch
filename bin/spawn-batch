@@ -383,7 +383,7 @@ function genjob {
         echo '# --------------------------------------------------'
         echo
         echo 'source ./.bashrc'
-        echo 'source ./.spawnrc'
+        echo '[[ -f ./.spawnrc ]] && source ./.spawnrc'
         echo 
         echo '# set variables'
         echo 
