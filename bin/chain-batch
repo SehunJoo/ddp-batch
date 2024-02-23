@@ -3,7 +3,7 @@
 set -e
 
 function usage {
-    echo "usage: $(basename $0) [-c] [-D ndata] [-n ncycles] [-p pressure] [-l lowpress] [-R] [-r rcut] [-f full] [-m minima] [-b nbest] [-d deviation] [-w waitseconds] [-j jiggles] [-J Jiggles] [-a amp] [-T temp] [-S step] [-t time] [-P npoly] [-L lowexp] [-H highexp] [-B nbody] [-N nnodes] [-E deltae] [-C compress] [-M mpinp] [-O ompnp] [-F minpot] [-A] [-x natexp] [-u nembed] [-k] [-X] [-Q] [-e] [-s seed]" 2>&1
+    echo "usage: $(basename $0) [-c] [-D ndata] [-n ncycles] [-p pressure] [-l lowpress] [-R] [-r rcut] [-f full] [-m minima] [-b nbest] [-d deviation] [-w waitseconds] [-j jiggles] [-J Jiggles] [-a amp] [-T temp] [-S step] [-t time] [-P npoly] [-L lowexp] [-H highexp] [-B nbody] [-N nnodes] [-E deltae] [-C compress] [-M mpinp] [-O ompnp] [-F minpot] [-A] [-x natexp] [-u nembed] [-y lmin] [-W asym] [-k] [-X] [-Q] [-e] [-s seed]" 2>&1
     echo '  iteratively generate a data derived potential'
     echo '   -c             clean up (deletes files)'
     echo '   -D ndata       truncate dataset'
@@ -29,13 +29,15 @@ function usage {
     echo '   -B nbody       highest body order'
     echo '   -N nnodes      number of nodes in hidden layer'
     echo '   -E deltae      energy window'
-    echo '   -C compress    compress input by factor [1]'
+    echo '   -C compress    compress input by factor (1)'
     echo '   -M mpinp       number of remote MPI cores'
     echo '   -O ompnp       number of remote OMP cores'
     echo '   -F minpot      approximate floor for the number of potentials'
     echo '   -A             mean features - no active learning'
     echo '   -x natexp      energy normalisation natom exponent (default 0.5)'
     echo '   -u nembed      size of composition embedding space (0)'
+    echo '   -Y lmin        minimum lambda for regularisation (0)'
+    echo '   -W asym        cost function asymmetry (0)'
     echo '   -X             no early stopping'
     echo '   -Q             no parity plots'
     echo '   -k             keep intermediate files'
@@ -57,7 +59,7 @@ full=1000
 minima=100
 nbest=1
 deviation=0.0
-waitseconds=60
+waitseconds=10000
 jiggles=10
 Jiggles=100
 amp=0.02
@@ -77,6 +79,8 @@ minpot=0
 average='false'
 natexp=0.5
 nembed=0
+lmin=0
+asym=0
 keep='false'
 noearly='false'
 noparity='false'
@@ -88,7 +92,7 @@ if [[ -f data.res || -f data.res.tar || data.res.tar.xz ]]; then # If data exist
    ncycles=0
 fi
 
-optstring=":cs:D:n:p:l:Rr:f:m:b:d:w:j:J:a:T:S:t:P:L:H:B:N:E:C:M:O:F:Ax:u:kXQeh"
+optstring=":cs:D:n:p:l:Rr:f:m:b:d:w:j:J:a:T:S:t:P:L:H:B:N:E:C:M:O:F:Ax:u:Y:W:kXQeh"
 
 while getopts ${optstring} arg; do
     case ${arg} in
@@ -188,6 +192,12 @@ while getopts ${optstring} arg; do
    u)
        nembed="${OPTARG}"
        ;;
+   Y)
+       lmin="${OPTARG}"
+       ;;
+   W)
+       asym="${OPTARG}"
+       ;;
  	k)
  	    keep="true"
  	    ;;
@@ -232,8 +242,8 @@ if [[ ${clean} == true ]];then
 
     select yesno in "yes" "all" "no"; do
 	    case $yesno in
-          yes ) rm -fr flock-*.agr flock-*.delta $seed.cell.* $seed-*.* training validation testing good_castep hopper bad_castep list.franks sed* STOP jobscript_*.sh DONE_* ; ./despawn-batch 2> /dev/null ; ./defarm-batch 2 >/dev/null ;  rm -fr  despawn-batch defarm-batch; exit 0;;
-          all ) rm -fr flock-*.agr flock-*.delta $seed.cell.* $seed-*.* training validation testing good_castep hopper bad_castep list.franks sed* STOP jobscript_*.sh DONE_* $seed $seed.eddp data.res* ; ./despawn-batch 2> /dev/null ; ./defarm-batch 2 >/dev/null ;  rm -fr  despawn-batch defarm-batch; exit 0;;
+          yes ) rm -fr flock-*.agr flock-*.delta $seed.cell.* $seed-*.* training validation testing good_castep hopper bad_castep list.franks sed* STOP jobscript_*.sh DONE_* FINISH ; ./despawn-batch 2> /dev/null ; ./defarm-batch 2 >/dev/null ;  rm -fr  despawn-batch defarm-batch; exit 0;;
+          all ) rm -fr flock-*.agr flock-*.delta $seed.cell.* $seed-*.* training validation testing good_castep hopper bad_castep list.franks sed* STOP jobscript_*.sh DONE_* FINISH $seed $seed.eddp data.res* ; ./despawn-batch 2> /dev/null ; ./defarm-batch 2 >/dev/null ;  rm -fr  despawn-batch defarm-batch; exit 0;;
           no ) exit 1;;
 	    esac
     done
@@ -291,17 +301,18 @@ function banner {
 	echo "      average:     "$average
 	echo "      natexp:      "$natexp
 	echo "      nembed:      "$nembed
+	echo "      lmin:        "$lmin
+	echo "      asym:        "$asym
 	echo "      keep:        "$keep
 	echo "      noearly:     "$noearly
 	echo "      noparity:    "$noparity
 	echo "      email:       "$email
 	echo "      seed:        "$seed
-	echo "      seed:        "$seed
    echo
 	echo "      remotenode:  "$remotenode
 	echo "      remotecores: "$remotecores
 	echo
-	echo "      job starting: "$seed" "`date`
+	echo "    job starting: "$seed" "`date`
 	echo
 
 }
@@ -319,7 +330,7 @@ function fullrand {
     until [[ $counter -ge $full ]]
     do
 	    sleep 1
-	    test -f "./STOP" && echo -e '\nstopping chain ..' && ./despawn-batch && exit 0
+	    test -f "./STOP" && echo -e '\n    stopping chain ..' && ./despawn-batch && exit 0
 	    counter=`ls $seed-*.res 2> /dev/null | wc -l`
 	    echo -n -e "\r\033[0K    "$counter" structures"
     done
@@ -371,7 +382,7 @@ function markandjiggle {
     until [[ $counter -eq 0 ]]
     do
 	    sleep 1
-	    test -f "./STOP" && echo -e '\nstopping chain ..' && ./despawn-batch && exit 0
+	    test -f "./STOP" && echo -e '\n    stopping chain ..' && ./despawn-batch && exit 0
 	    counter=`ls $seed-*.res ./hopper/$seed-*.res 2> /dev/null | wc -l`
 	    echo -n -e "\r\033[0K    "$counter" remaining"
     done
@@ -413,7 +424,7 @@ function relaxandjiggle {
     until [[ $counter -ge $minima || $ntrial -ge $waitseconds ]]
     do
 	    sleep 1
-	    test -f "./STOP" && echo -e '\nstopping chain ..' && ./despawn-batch && exit 0
+	    test -f "./STOP" && echo -e '\n    stopping chain ..' && ./despawn-batch && exit 0
 	    counter=`ls $seed-*.res 2> /dev/null | wc -l`
         nfail=$(ls trash/*.err 2> /dev/null | wc -l) 
         ntrial=$((counter + nfail)) 
@@ -423,10 +434,10 @@ function relaxandjiggle {
 
 	if [[ $counter -lt $minima ]]; then 
 		deviation=`echo "scale=3;"$deviation"/2.000" | bc -l` 
-		echo '    deviation bias reduced to: '$deviation
+		[[ $deviation -ne 0 ]] && echo '    deviation bias reduced to: '$deviation
 	else
 		deviation=`echo "scale=3;"$deviation"*1.618" | bc -l` 
-		echo '    deviation bias increased to: '$deviation
+		[[ $deviation -ne 0 ]] && echo '    deviation bias increased to: '$deviation
 	fi
 
     echo '    stopping airss ...'
@@ -480,7 +491,7 @@ function relaxandjiggle {
        until [[ $counter -eq 0 ]]
        do
           sleep 1
-   	    test -f "./STOP" && echo -e '\nstopping chain ..' && ./despawn-batch && exit 0
+   	    test -f "./STOP" && echo -e '\n    stopping chain ..' && ./despawn-batch && exit 0
    	    counter=`ls $seed-*.res ./hopper/$seed-*.res 2> /dev/null | wc -l`
    	    echo -n -e "\r\033[0K    "$counter" remaining"
        done
@@ -515,7 +526,7 @@ function relaxandjiggle {
     until [[ $counter -eq 0 ]]
     do
 	    sleep 1
-	    test -f "./STOP" && echo -e '\nstopping chain ..' && ./despawn-batch && exit 0
+	    test -f "./STOP" && echo -e '\n    stopping chain ..' && ./despawn-batch && exit 0
 	    counter=`ls $seed-*.res ./hopper/$seed-*.res 2> /dev/null | wc -l`
 	    echo -n -e "\r\033[0K    "$counter" remaining"
     done
@@ -582,11 +593,15 @@ function genpot {
 
     #let maxpot=$numjobs*$numpot
         
-    [[ $nnodes -ne 0 ]] && nodeflag="-nn ${nnodes//,/ }" || nodeflag=''
+    [[ ${nnodes} -ne 0 ]] && nodeflag="-nn ${nnodes//,/ }" || nodeflag=''
  
-    [[ ${noearly} == true ]] && earlystop='-ne' || earlystop=''
+    [[ ${lmin} -ne 0 ]] && lambdaflag="-lmin ${lmin}" || lambdaflag=''
  
-    farm-batch  -command forge $earlystop -en $natexp -c $compress -ompnp $ompnp -es 100 -n 1000 $nodeflag -np -q -numpot $minpot -s ./$seed/$seed &
+    [[ ${asym} -ne 0 ]] && asymflag="-asym ${asym}" || asymflag=''
+ 
+    [[ ${noearly} == true ]] && esflag='-ne' || esflag=''
+ 
+    farm forge $esflag -en $natexp -c $compress $lambdaflag $asymflag -ompnp $ompnp -es 100 -n 1000 $nodeflag -np -q -numpot $numpot -s ./$seed/$seed
     
     counter=0
 
@@ -635,7 +650,7 @@ function genpot {
 	    
     [[ ${noparity} == false ]] && ( mkdir -p plots && mv flock-*.* plots )
     
-    [[ -f embed.data ]] &&  ( cat embed.data >> $seed.eddp ; rm -f embed.data )
+    [[ -f embed.data ]] &&  ( cat embed.data >> $seed.eddp )
    
 	 cat flock.out
 
@@ -654,10 +669,10 @@ function genpot {
 
 banner
 
-echo "      called as "${0##*/}" "${@}
+echo "    called as "${0##*/}" "${@}
 echo
 
-rm -f ./STOP
+rm -f ./STOP ./FINISH
 
 # unpack data files
 
@@ -688,7 +703,10 @@ let nbest_orig=$nbest
 
 for ((i = 1 ; i <= $ncycles ; i++))
 do
-    test -f "./STOP" && echo -e '\nstopping chain ..' && exit 0
+    test -f "./FINISH" && echo -e '\n    finishing chain ..' && break
+    echo
+    echo '    ==============================  '$i'  =============================='
+    echo
     relaxandjiggle
     genpot
     let nbest=$nbest*$nbest_orig

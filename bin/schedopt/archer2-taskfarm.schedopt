@@ -1,12 +1,18 @@
 ## ======================================================================================
 ## Archer2 - QoS=taskfarm
 ##
-##   Max Nodes Per Job : 16      (#SBATCH --nodes=16)
-##   Max Walltime      : 24 hrs  (#SBATCH --time=24:00:00)
-##   Max Jobs Running  : 32      (#SBATCH --array=1-32)
-##   Notes             : Maximum of 256 nodes in use by any one user at any time
-##                       --nodes=16 --array=1-16
-##                       --nodes=8  --array=1-32
+##   Max Nodes Per Job   : 16      (#SBATCH --nodes=16)
+##   Max Walltime        : 24 hrs  (#SBATCH --time=24:00:00)
+##   Max Jobs Running    : 32      (#SBATCH --array=1-32)
+##   Notes               : Maximum of 256 nodes in use by any one user at any time
+##                         --nodes=16 --array=1-16
+##                         --nodes=8  --array=1-32
+##  --hint=nomultithread : do not use hyperthreads/SMP; only use physical cores
+##  --distribution=block:block :  allocate processes to cores in a sequential fasion
+##      the first block means use a block distribution of processes across nodes 
+##      (i.e. fill nodes before moving onto the next one)
+##      the second block means use a block distribution of processes across "sockets" within a node
+##      (i.e. fill a "socket" before moving on to the next one)
 ## ======================================================================================
 ## Additional parameters
 ##
