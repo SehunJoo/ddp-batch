@@ -102,9 +102,9 @@ function gen_chainbatch {
                  -e '/let maxpot/        s/let/#let/ ' \
                  -e '/frankm/            s/ssh -x $remotenode "cd $rootdir ; /spawn-batch -despawn -command "/' \
                  -e '/franks/            s/ssh -x $remotenode "cd $rootdir ; /spawn-batch -despawn -command "/' \
-                 -e '/forge $earlystop/         s/-numpot $numpot/-numpot $minpot/ ' \
-                 -e '/forge $earlystop/'"         s/farm/farm-batch ${opts} -command/ " \
-                 -e '/forge $earlystop/         s/$seed\/$seed/$seed\/$seed \&/ ' \
+                 -e '/forge $esflag/         s/-numpot $numpot/-numpot $minpot/ ' \
+                 -e '/forge $esflag/'"         s/farm/farm-batch ${opts} -command/ " \
+                 -e '/forge $esflag/         s/$seed\/$seed/$seed\/$seed \&/ ' \
                  -e "/echo '    maximum/ s/echo/#echo/ " \
                  -e '/let waitpot/       s/let/#let/ ' \
                  -e "/echo '    waiting/ s/echo/#echo/ " \

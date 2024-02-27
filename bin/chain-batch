@@ -601,7 +601,7 @@ function genpot {
  
     [[ ${noearly} == true ]] && esflag='-ne' || esflag=''
  
-    farm forge $esflag -en $natexp -c $compress $lambdaflag $asymflag -ompnp $ompnp -es 100 -n 1000 $nodeflag -np -q -numpot $numpot -s ./$seed/$seed
+    farm-batch  -command forge $esflag -en $natexp -c $compress $lambdaflag $asymflag -ompnp $ompnp -es 100 -n 1000 $nodeflag -np -q -numpot $minpot -s ./$seed/$seed &
     
     counter=0
 
