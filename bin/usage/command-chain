@@ -1,37 +1,46 @@
 #!/bin/bash
 
 seed='Li'
+opts="-M 4  -O 4"                     # number of cores 
 
-## options to set the number of cores
+#==============================================================================
+# dataset construction
+#==============================================================================
 
-opts="-M 4  -O 4"                                   
+## random structurese
+opts="${opts} -f 1000"                # number of random structures (1000)
 
-## options for dataset construction - random
+## marker structures
+opts="${opts} -J 100"                 # number of jiggles of marker (100)
 
-opts="${opts} -f 1000"                      # number of strctures
+## local minima structures
+opts="${opts} -n 5"                   # number of cycles (5)
+opts="${opts} -m 100"                 # number of local minima structures (100)
+opts="${opts} -p 0.0001 -l 0.0 -R"    # pressure  (0.001, 0.0, false)
+opts="${opts} -d 0.0 -w 600"          # deviation bias, trials (0.0, 10000)
+opts="${opts} -j 10"                  # number of jiggles of local minima (10)
+opts="${opts} -a 0.02"                # amplitude for jiggling (0.02)
+#opts="${opts} -T none -S 1 -t 10"    # thermalising
 
-## options for dataset construction - local minima
+## filter
+opts="${opts} -D 0"                   # number of data (0)
+opts="${opts} -E 10.0"                # energy window (10.0)
 
-opts="${opts} -n 5"                         # number of cycles
-opts="${opts} -m 100 -p 0.0001 -l 0.0 -R"   # number of structures & pressure
-opts="${opts} -d 0.0 -w 600"                # deviation bias
-opts="${opts} -a 0.02 -j 10"                # jiggling
-#opts="${opts} -T none -S 1 -t 10"           # thermalising
+#==============================================================================
+# EDDP feature vector
+#==============================================================================
 
-## options for dataset
-
-#opts="${opts} -D 0"                        # number of data
-opts="${opts} -E 10.0"                      # energy window
-
-## options for feature vectors
-
-opts="${opts} -r 3.75 -B 3 -P 5 -L 2 -H 10"
+opts="${opts} -r 3.75"                # cutoff for features (3.75)
+opts="${opts} -B 3"                   # highest body order (3)
+opts="${opts} -P 5 -L 2 -H 10"        # polynomials (5, 2, 10)
 #opts="${opts} -A"
 
-## options for training
+#==============================================================================
+# neural network
+#==============================================================================
 
-opts="${opts} -N 5 -C 1 -F 256"
-#opts="${opts} -x 0.5 -u 0"
+opts="${opts} -N 5 -C 1.0 -F 256"     # (5, 1.0, 0)
+#opts="${opts} -u 0"                  # size of composition embedding space (0)
 
 ########
 # MAIN #
@@ -42,39 +51,3 @@ nohup chain-batch ${opts} -s $seed &
 
 echo $! > .pid
 
-
-#  iteratively generate a data derived potential
-#   -c             clean up (deletes files)
-#   -D ndata       truncate dataset
-#   -n ncycles     number of cycles
-#   -p pressure    target pressure (high)
-#   -l lowpress    target pressure (low)
-#   -R prand       randomise pressure
-#   -r rcut        cutoff for features
-#   -f full        number of fully random structures
-#   -m minima      number of local minima each cycle
-#   -b nbest       best of nbest minima retained
-#   -d deviation   deviation bias
-#   -w waitseconds how long to wait for minima before reducing deviation bias
-#   -j jiggles     number of jiggles of local minima
-#   -J Jiggles     number of jiggles of marker structures
-#   -a amp         amplitude for jiggling
-#   -T temp        temperature for thermalising
-#   -S step        time step for thermalising (fs)
-#   -t time        time for thermalising (ps)
-#   -P npoly       number of polynomials
-#   -L lowexp      lowest exponent
-#   -H highexp     highest exponent
-#   -B nbody       highest body order
-#   -N nnodes      number of nodes in hidden layer
-#   -E deltae      energy window
-#   -C compress    compress input by factor [1]
-#   -M mpinp       number of remote MPI cores
-#   -O ompnp       number of remote OMP cores
-#   -F minpot      approximate floor for the number of potentials
-#   -A             mean features - no active learning
-#   -x             energy normalisation natom exponent (default 0.5)
-#   -u             size of composition embedding space (0)
-#   -k             keep intermediate files
-#   -e             send email to address when completed
-#   -s seed        seedname

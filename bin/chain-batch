@@ -87,7 +87,7 @@ noparity='false'
 email='false'
 seed='seed'
 
-if [[ -f data.res || -f data.res.tar || data.res.tar.xz ]]; then # If data exists, but default, no active learning
+if [[ -f data.res || -f data.base || -f data.res.xz || -f data.base.xz || -f data.res.tar || -f data.res.tar.xz ]]; then # If data exists, but default, no active learning ## CHECK THIS LOGIC ###
    full=0
    ncycles=0
 fi
@@ -365,7 +365,7 @@ function markandjiggle {
     grep -L TITL ./marks/$seed-*.res | xargs rm -f
     grep -L END ./marks/$seed-*.res | xargs rm -f
     
-    ( cd ./marks && reshake $amp $amp 0 $Jiggles $seed 2> /dev/null )
+    ( cd ./marks && pshake $amp $amp $Jiggles $seed )
     
     sleep 1
     
@@ -434,10 +434,10 @@ function relaxandjiggle {
 
 	if [[ $counter -lt $minima ]]; then 
 		deviation=`echo "scale=3;"$deviation"/2.000" | bc -l` 
-		[[ $deviation -ne 0 ]] && echo '    deviation bias reduced to: '$deviation
+		(( $(echo "$deviation > 0.0" | bc -l) )) && echo '    deviation bias reduced to: '$deviation
 	else
 		deviation=`echo "scale=3;"$deviation"*1.618" | bc -l` 
-		[[ $deviation -ne 0 ]] && echo '    deviation bias increased to: '$deviation
+		(( $(echo "$deviation > 0.0" | bc -l) )) && echo '    deviation bias increased to: '$deviation
 	fi
 
     echo '    stopping airss ...'
@@ -459,7 +459,7 @@ function relaxandjiggle {
     
     	ls $seed-*.res | shuf | head -n -$minum | xargs -r rm
     
-    	reshake $amp $amp 0 $jiggles $seed 2> /dev/null
+    	pshake $amp $amp $jiggles $seed
     
     	sleep 1
     
@@ -478,7 +478,7 @@ function relaxandjiggle {
     
        echo '    thermalising structures ...'
     
-       echo '-ts '$step' -dr 0.5 -qt '$time' 10 -tt '$temp > $seed.par
+       echo '-ts '$step' -dr 0.5 -qt '$time' -tt '$temp > $seed.par
     
        echo '    launching crud ramble ...'
     
@@ -629,9 +629,6 @@ function genpot {
     
     sleep 5
 
-    find . -name "$seed/$seed*.ddp" -empty -type f -delete
-    grep -L powers $seed/$seed*.ddp | xargs rm -f
-    ls $seed/$seed*.ddp | shuf | head -n -$minpot | xargs -r rm
     let gotpot=`ls $seed/$seed*.ddp | wc -l`
 
     echo '    got '$gotpot' potentials'
@@ -678,6 +675,7 @@ rm -f ./STOP ./FINISH
 
 [[ -f data.res.tar.xz ]] && ( echo '    unpacking data.res.tar.xz' ; unxz data.res.tar.xz )
 [[ -f data.res.xz ]] && ( echo '    unpacking data.res.xz' ; unxz data.res.xz )
+[[ -f data.base.xz ]] && ( echo '    unpacking data.base.xz' ; unxz data.base.xz )
 
 # get started with fully random structures
 
@@ -691,11 +689,11 @@ nmarks=`ls -1 ./marks/$seed-*.res 2>/dev/null | wc -l`
 
 # stop if we have no training data
 
-[[ ! -f ./data.res && ! -f ./data.res.tar ]] && ( echo '    no training data found - stopping' ; exit 1 )
+[[ ! -f ./data.res && ! -f ./data.base && ! -f ./data.res.tar && ! -f ./$seed.eddp ]] && ( echo '    no training data found - stopping' ; exit 1 )
 
 # generate an initial potential
 
-genpot
+[[ ! -f ./$seed.eddp ]] && genpot || echo '    warm start from '$seed'.eddp'
 
 # start cycles
 
@@ -722,6 +720,7 @@ wait
 
 [[ -f data.res.tar ]] && ( echo '    packing data.res.tar' ; xz -T0 data.res.tar )
 [[ -f data.res ]] && ( echo '    packing data.res' ; xz -T0 data.res )
+[[ -f data.base ]] && ( echo '    packing data.base' ; xz -T0 data.base )
 
 echo
 echo '    chain job complete: '$seed' '`date`
