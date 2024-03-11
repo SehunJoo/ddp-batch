@@ -45,7 +45,7 @@ numpot=$3
 
 echo "    starting forge monitoring ..."
 
-touch ./status.forge.${jobid}
+touch ./status.${jobid}.forge
 
 counter=0
 counterddp=0
@@ -55,10 +55,10 @@ do
     counter=$(grep "testing:   testing" ${seed}/*.out 2> /dev/null | wc -l)
     counterddp=$(ls ${seed}/*.ddp 2> /dev/null | wc -l)
 
-    sed -i "/check_time/d"                                     ./status.forge.${jobid}
-    sed -i "/no. potentials/d"                                 ./status.forge.${jobid}
-    echo "check_time:         $(date +%Y-%m-%d\ %H:%M:%S)"  >> ./status.forge.${jobid}
-    echo "no. potentials:     ${counterddp}"                >> ./status.forge.${jobid}
+    sed -i "/check_time/d"                                     ./status.${jobid}.forge
+    sed -i "/no. potentials/d"                                 ./status.${jobid}.forge
+    echo "check_time:         $(date +%Y-%m-%d\ %H:%M:%S)"  >> ./status.${jobid}.forge
+    echo "no. potentials:     ${counterddp}"                >> ./status.${jobid}.forge
 
     SECONDS=0
     until [[ $SECONDS -ge 5 ]]

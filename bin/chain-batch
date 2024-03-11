@@ -59,7 +59,7 @@ full=1000
 minima=100
 nbest=1
 deviation=0.0
-waitseconds=10000
+waitseconds=1000
 jiggles=10
 Jiggles=100
 amp=0.02
@@ -323,14 +323,14 @@ function fullrand {
     
     echo '    launching airss ...'
     
-    spawn-batch  -command airss.pl -max $full -mpinp $mpinp -step 0 -seed $seed &
+    ( spawn-batch  -command airss.pl -max $full -mpinp $mpinp -step 0 -seed $seed ) &>> spawn-batch.out &
     
     counter=0
     
     until [[ $counter -ge $full ]]
     do
 	    sleep 1
-	    test -f "./STOP" && echo -e '\n    stopping chain ..' && ./despawn-batch && exit 0
+	    test -f "./STOP" && echo -e '\n    stopping chain ..' && ./despawn-batch &>> spawn-batch.out && exit 0
 	    counter=`ls $seed-*.res 2> /dev/null | wc -l`
 	    echo -n -e "\r\033[0K    "$counter" structures"
     done
@@ -338,7 +338,7 @@ function fullrand {
     echo
     echo '    stopping airss ...'
     
-    ./despawn-batch
+    ./despawn-batch &>> spawn-batch.out
     
     sleep 5
     
@@ -373,7 +373,7 @@ function markandjiggle {
         
     echo '    launching crud ...'
     
-    spawn-batch  -command crud.pl -mpinp $mpinp &
+    ( spawn-batch  -command crud.pl -mpinp $mpinp ) &>> spawn-batch.out &
     
     sleep 1
     
@@ -382,7 +382,7 @@ function markandjiggle {
     until [[ $counter -eq 0 ]]
     do
 	    sleep 1
-	    test -f "./STOP" && echo -e '\n    stopping chain ..' && ./despawn-batch && exit 0
+	    test -f "./STOP" && echo -e '\n    stopping chain ..' && ./despawn-batch &>> spawn-batch.out && exit 0
 	    counter=`ls $seed-*.res ./hopper/$seed-*.res 2> /dev/null | wc -l`
 	    echo -n -e "\r\033[0K    "$counter" remaining"
     done
@@ -392,7 +392,7 @@ function markandjiggle {
     echo
     echo '    stopping crud ...'
     
-    ./despawn-batch
+    ./despawn-batch &>> spawn-batch.out
     
     sleep 5
     
@@ -412,9 +412,9 @@ function relaxandjiggle {
 
     if [[ ${prand} == true ]]
     then
-	    spawn-batch  -command airss.pl -max $minima -keep -mpinp $mpinp -press $pressure -pmin $lowpress -prand -repose -nbest $nbest -devmin $deviation -seed $seed &
+	    ( spawn-batch  -command airss.pl -max $minima -keep -mpinp $mpinp -press $pressure -pmin $lowpress -prand -repose -nbest $nbest -devmin $deviation -seed $seed ) &>> spawn-batch.out &
     else
-	    spawn-batch  -command airss.pl -max $minima -keep -mpinp $mpinp -press $pressure -repose -nbest $nbest -devmin $deviation -seed $seed &
+	    ( spawn-batch  -command airss.pl -max $minima -keep -mpinp $mpinp -press $pressure -repose -nbest $nbest -devmin $deviation -seed $seed ) &>> spawn-batch.out &
     fi
 
     counter=0
@@ -424,7 +424,7 @@ function relaxandjiggle {
     until [[ $counter -ge $minima || $ntrial -ge $waitseconds ]]
     do
 	    sleep 1
-	    test -f "./STOP" && echo -e '\n    stopping chain ..' && ./despawn-batch && exit 0
+	    test -f "./STOP" && echo -e '\n    stopping chain ..' && ./despawn-batch &>> spawn-batch.out && exit 0
 	    counter=`ls $seed-*.res 2> /dev/null | wc -l`
         nfail=$(ls trash/*.err 2> /dev/null | wc -l) 
         ntrial=$((counter + nfail)) 
@@ -442,7 +442,7 @@ function relaxandjiggle {
 
     echo '    stopping airss ...'
     
-    ./despawn-batch
+    ./despawn-batch &>> spawn-batch.out
     
     sleep 5
     rm -rf trash
@@ -482,7 +482,7 @@ function relaxandjiggle {
     
        echo '    launching crud ramble ...'
     
-       spawn-batch  -command crud.pl -ramble -mpinp $mpinp &
+       ( spawn-batch  -command crud.pl -ramble -mpinp $mpinp ) &>> spawn-batch.out &
     
        sleep 1
     
@@ -491,9 +491,11 @@ function relaxandjiggle {
        until [[ $counter -eq 0 ]]
        do
           sleep 1
-   	    test -f "./STOP" && echo -e '\n    stopping chain ..' && ./despawn-batch && exit 0
+   	    test -f "./STOP" && echo -e '\n    stopping chain ..' && ./despawn-batch &>> spawn-batch.out && exit 0
    	    counter=`ls $seed-*.res ./hopper/$seed-*.res 2> /dev/null | wc -l`
-   	    echo -n -e "\r\033[0K    "$counter" remaining"
+        ngood=$(ls good_castep/*.res 2> /dev/null | wc -l) 
+        nbad=$(ls bad_castep/*.res 2> /dev/null | wc -l) 
+   	    echo -n -e "\r\033[0K    "$counter" remaining"" (# good_castep: $ngood, # bad_castep: $nbad)"
        done
     
        sleep 1
@@ -501,7 +503,7 @@ function relaxandjiggle {
        echo
        echo '    stopping crud ramble ...'
     
-       ./despawn-batch
+       ./despawn-batch &>> spawn-batch.out
     
        sleep 5
     
@@ -517,7 +519,7 @@ function relaxandjiggle {
     
     echo '    launching crud ...'
     
-    spawn-batch  -command crud.pl -mpinp $mpinp &
+    ( spawn-batch  -command crud.pl -mpinp $mpinp ) &>> spawn-batch.out &
     
     sleep 1
     
@@ -526,9 +528,12 @@ function relaxandjiggle {
     until [[ $counter -eq 0 ]]
     do
 	    sleep 1
-	    test -f "./STOP" && echo -e '\n    stopping chain ..' && ./despawn-batch && exit 0
+	    test -f "./STOP" && echo -e '\n    stopping chain ..' && ./despawn-batch &>> spawn-batch.out && exit 0
 	    counter=`ls $seed-*.res ./hopper/$seed-*.res 2> /dev/null | wc -l`
-	    echo -n -e "\r\033[0K    "$counter" remaining"
+        ngood=$(ls good_castep/*.res 2> /dev/null | wc -l) 
+        nbad=$(ls bad_castep/*.res 2> /dev/null | wc -l) 
+        nscffail=$(grep -i warning bad_castep/*.castep 2>/dev/null | wc -l)
+	    echo -n -e "\r\033[0K    "$counter" remaining"" (# good_castep: $ngood, # bad_castep: $nbad (scf $nscffail))"
     done
     
     sleep 1
@@ -536,7 +541,7 @@ function relaxandjiggle {
     echo
     echo '    stopping crud ...'
     
-    ./despawn-batch
+    ./despawn-batch &>> spawn-batch.out
     
     sleep 5
     
@@ -580,9 +585,9 @@ function genpot {
     if [[ ${average} == true ]]
     then
        [[ $ncycles -gt 0 ]] && (echo '    ncycles>0 not compatible with mean features' ; exit)
-       spawn-batch -despawn -command "frankm $rcut $nbody $npoly $lowexp $highexp $ntrain $nvalid $ntest $deltae $meanpress $nembed 2> /dev/null"
+       ( spawn-batch -despawn -command "frankm $rcut $nbody $npoly $lowexp $highexp $ntrain $nvalid $ntest $deltae $meanpress $nembed 2> /dev/null" ) &>> spawn-batch.out
     else
-       spawn-batch -despawn -command "franks $rcut $nbody $npoly $lowexp $highexp $ntrain $nvalid $ntest $deltae $meanpress $nembed 2> /dev/null"
+       ( spawn-batch -despawn -command "franks $rcut $nbody $npoly $lowexp $highexp $ntrain $nvalid $ntest $deltae $meanpress $nembed 2> /dev/null" ) &>> spawn-batch.out
     fi
     
     echo '    launching forge ...'
@@ -601,7 +606,7 @@ function genpot {
  
     [[ ${noearly} == true ]] && esflag='-ne' || esflag=''
  
-    farm-batch  -command forge $esflag -en $natexp -c $compress $lambdaflag $asymflag -ompnp $ompnp -es 100 -n 1000 $nodeflag -np -q -numpot $minpot -s ./$seed/$seed &
+    ( farm-batch  -command forge $esflag -en $natexp -c $compress $lambdaflag $asymflag -ompnp $ompnp -es 100 -n 1000 $nodeflag -np -q -numpot $minpot -s ./$seed/$seed  ) &>> spawn-batch.out &
     
     counter=0
 
@@ -614,7 +619,7 @@ function genpot {
     until [[ $counter -ge $minpot ]]
     do
 	    sleep 10
-	    test -f "./STOP" && echo -e '\n    stopping chain ..' && ./defarm-batch && exit 0
+	    test -f "./STOP" && echo -e '\n    stopping chain ..' && ./defarm-batch &>> spawn-batch.out && exit 0
        #counter=`grep "testing:   testing" $seed/*.out | wc -l`
         counter=`ls $seed/*.ddp 2> /dev/null | wc -l`
        echo -n -e "\r\033[0K    "$counter" potentials"
@@ -625,10 +630,11 @@ function genpot {
     echo
     echo '    stopping forge ...'
     
-    ./defarm-batch
+    ./defarm-batch &>> spawn-batch.out
     
     sleep 5
 
+    grep -L "power" $seed/*.ddp 2> /dev/null | xargs rm -f
     let gotpot=`ls $seed/$seed*.ddp | wc -l`
 
     echo '    got '$gotpot' potentials'
@@ -638,18 +644,18 @@ function genpot {
     
     [[ ${noparity} == true ]] && parityplot='-np -nt' || parityplot=''
     
-    spawn-batch -despawn -command "ls $seed/$seed*.ddp | flock -ompnp $ompnp -p $meanpress -v -q $parityplot > $seed.eddp 2> flock.out"
-    dir=$(date +%y%m%d-%H%M%S)-flock
-    mkdir $dir
-    cp flock-* $dir
-    cp -R $seed{,.cell,.param,.eddp} data.res* $dir
-    sleep 1
+    ( spawn-batch -despawn -command "ls $seed/$seed*.ddp | flock -ompnp $ompnp -p $meanpress -v -q $parityplot > $seed.eddp 2> flock.out" ) &>> spawn-batch.out
 	    
     [[ ${noparity} == false ]] && ( mkdir -p plots && mv flock-*.* plots )
     
     [[ -f embed.data ]] &&  ( cat embed.data >> $seed.eddp )
    
 	 cat flock.out
+    dir=$(date +%y%m%d-%H%M%S)-flock
+    mkdir $dir
+    cp -R plots flock.out $dir
+    cp -R $seed{,.cell,.param,.eddp} data.res* $dir
+    sleep 1
 
     wait
  

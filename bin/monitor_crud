@@ -43,28 +43,29 @@ jobid=$1
 
 echo "    starting crud monitoring ..."
 
-touch ./status.crud.${jobid}
+touch ./status.${jobid}.crud
 
 counter=1
-
+SECONDS=0
 until [[ ${counter} -eq 0 ]]
 do
-    sleep 5
+    if [[ $SECONDS -ge 5 ]]; then
+        counter=$(find . ./hopper -maxdepth 1 -type f -name "*.res" | sed "/data.res/d" | wc -l)
+        ngood=$(ls good_castep/*.res 2> /dev/null | wc -l)
+        nbad=$(ls bad_castep/*.res 2> /dev/null | wc -l)
 
-    counter=$(find . ./hopper -maxdepth 1 -type f -name "*.res" | sed "/data.res/d" | wc -l)
+        sed -i "/check_time/d"                                                ./status.${jobid}.crud
+        sed -i "/no. structures/d"                                            ./status.${jobid}.crud
+        echo "check_time:                   $(date +%Y-%m-%d\ %H:%M:%S)"   >> ./status.${jobid}.crud
+        echo "no. structures (remaining):   ${counter}"                    >> ./status.${jobid}.crud
+        echo "no. structures (good):        $ngood"                        >> ./status.${jobid}.crud
+        echo "no. structures (bad):         $nbad"                         >> ./status.${jobid}.crud
+        SECONDS=0
+    fi
 
-    sed -i "/check_time/d"                                      ./status.crud.${jobid}
-    sed -i "/no. structures/d"                                  ./status.crud.${jobid}
-    echo "check_time:         $(date +%Y-%m-%d\ %H:%M:%S)"   >> ./status.crud.${jobid}
-    echo "no. structures:     ${counter}"                    >> ./status.crud.${jobid}
-
-    SECONDS=0
-    until [[ $SECONDS -ge 5 ]]
-    do
-        [[ -f ./stopmonitor ]] && echo '    stopping crud monitoring ...' && exit 0
-        [[ -f ./STOP        ]] && echo '    stopping crud monitoring ...' && exit 0
-        sleep 1
-    done
+    [[ -f ./stopmonitor ]] && echo '    stopping crud monitoring ...' && exit 0
+    [[ -f ./STOP        ]] && echo '    stopping crud monitoring ...' && exit 0
+    sleep 1
 done
 
 sleep 1

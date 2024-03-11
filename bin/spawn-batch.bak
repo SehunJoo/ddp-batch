@@ -57,18 +57,14 @@ fi
 despawn='false'
 bakres='none'
 genjob='false'
-opt_np=1
-opt_nnodes=1
 cmdline=''
 mpinp=1
-ompnp=1
 seed=''
 max=1000000    # default $opt_max  in airss.pl
 exe='castep'   # default $opt_exec in airss.pl
 numpot='256'   # default 
 
 
-args=$(echo ${@})
 # Parse arguments
 
 while [ $# -ge 1 ] ; do
@@ -81,12 +77,6 @@ while [ $# -ge 1 ] ; do
             ;;
         -bakres)
             bakres=$2; shift 2
-            ;;
-        -np)
-            opt_np=$2; shift 2
-            ;;
-        -nnodes)
-            opt_nnodes=$2; shift 2
             ;;
         -command)
             shift 1; cmdline=$*;
@@ -170,8 +160,8 @@ if [[ -f STOP ]]; then
     exit 127
 fi
 
-if [[ $(ls ./.schedopt | wc -l) -ne 1 ]]; then
-    echo "There should be .schedopt file"
+if [[ $(ls *.schedopt | wc -l) -ne 1 ]]; then
+    echo "There should be one *.schedopt file"
     exit 127
 fi
 
@@ -179,7 +169,7 @@ fi
 
 # Read *.schedopt file and get options for scheduler
 
-optfile="./.schedopt"
+optfile=$(ls *.schedopt)
 schedopt=$(cat $optfile | sed 's/##[[:print:]]*//g' | sed "/^%block ${program}/,/^%endblock ${program}/!d;//d" )
 [ -z "$schedopt" ] &&  schedopt=$(cat $optfile  | sed '/^%block default/,/^%endblock default/!d;//d')
 
@@ -201,6 +191,7 @@ else
     echo "sge | slurm is only available"
     exit 127
 fi
+
 
 
 # Specify the amount of computational resources to request
@@ -235,67 +226,65 @@ then
 fi
 
 
-# actual size of subjobs
 
-cmd_np=$((mpinp * ompnp))
-[[ $program == 'franks' ]] && cmd_np=$sched_ncores_per_node
-[[ $program == 'flock' ]] && cmd_np=$sched_ncores_per_node
-cmd_nnodes=$(((np - 1) / sched_ncores_per_node + 1))
+# Specify the size of subjobs
 
+nnodes_per_subjob=$(echo "$nonschedopt" | grep 'nnodes_per_subjob' | awk 'BEGIN {FS="="} {print $2}' | awk '{print $1}')
+[[ -z $nnodes_per_subjob ]] && nnodes_per_subjob=1
+ncores_per_subjob=$(echo "$nonschedopt" | grep 'ncores_per_subjob' | awk 'BEGIN {FS="="} {print $2}' | awk '{print $1}')
+[[ -z $ncores_per_subjob ]] && ncores_per_subjob=$sched_ncores_per_node
+ncores_per_subjob_per_node=$(( ($ncores_per_subjob + $nnodes_per_subjob - 1) / $nnodes_per_subjob ))
 
-ncores_per_instance=$((opt_np > cmd_np ? opt_np : cmd_np))
-nnodes_per_instance=$((opt_nnodes > cmd_nnodes ? opt_nnodes : cmd_nnodes))
-ncores_per_instance_per_node=$(((ncores_per_instance + nnodes_per_instance - 1) / nnodes_per_instance))
+# actual size of subjobs (underpopulation)
+
+np=$(( $mpinp * $ompnp ))
+np_per_node=$(( ($np + $nnodes_per_subjob - 1) / $nnodes_per_subjob ))
 
 mem_per_core=$(echo "$nonschedopt" | grep 'mem_per_core' | awk 'BEGIN {FS="="} {print $2}' | awk '{print $1}')
-mem_per_instance=$((mem_per_core * ncores_per_instance_per_node))
+mem_per_subjob=$(( $mem_per_core * $ncores_per_subjob_per_node ))
 
 
 
 # Specify how to distribute subjobs
 
-if [[ $nnodes_per_instance -eq 1 ]]; then
+if [[ $nnodes_per_subjob -eq 1 ]]; then
 
     # single-node calculation
 
-    ninstances_per_node=$(echo "$sched_ncores_per_node / $ncores_per_instance" | bc)
-    ninstances_per_job=$(echo "$sched_nnodes_per_job * $ninstances_per_node" | bc)
+    nsubjobs_per_node=$(echo "$sched_ncores_per_node / $ncores_per_subjob" | bc)
+    nsubjobs_per_job=$(echo "$sched_nnodes_per_job * $nsubjobs_per_node" | bc)
 
-elif [[ $nnodes_per_instance -gt 1 ]]; then
+elif [[ $nnodes_per_subjob -gt 1 ]]; then
 
     # multi-node calculation
 
-    ninstances_per_node="1"
-    ninstances_per_job=$(echo "$sched_nnodes_per_job / $nnodes_per_instance" | bc)
+    nsubjobs_per_node="1"
+    nsubjobs_per_job=$(echo "$sched_nnodes_per_job / $nnodes_per_subjob" | bc)
 fi
-ninstances_per_array=$(echo "$sched_njobs_per_array * $ninstances_per_job" | bc)
+nsubjobs_per_array=$(echo "$sched_njobs_per_array * $nsubjobs_per_job" | bc)
 
 
 
 # Check before proceeding
 
-if [[ $nnodes_per_instance -gt $sched_nnodes_per_job ]]; then
+if [[ $nnodes_per_subjob -gt $sched_nnodes_per_job ]]; then
     echo "Warning: number of nodes for a subjob should be equal or less than number of nodes requested for a job"
     echo "number of nodes (/job)    : $sched_nnodes_per_job"
-    echo "number of nodes (/subjob) : $nnodes_per_instance"
+    echo "number of nodes (/subjob) : $nnodes_per_subjob"
     exit 127
 fi
 
-if (( sched_nnodes_per_job % nnodes_per_instance != 0 )); then
-  echo "$sched_nnodes_per_job does not divide evenly by $nnodes_per_instance."
-fi
-
-if [[ $ncores_per_instance_per_node -gt $sched_ncores_per_node ]]; then
+if [[ $ncores_per_subjob_per_node -gt $sched_ncores_per_node ]]; then
     echo "Warning: number of cores per node for a subjob should be equal or less than the number of cores per node"
     echo "number of cores (/node)        : $sched_ncores_per_node"
-    echo "number of cores (/subjob/node) : $ncores_per_instance_per_node"
+    echo "number of cores (/subjob/node) : $ncores_per_subjob_per_node"
     exit 127
 fi
 
-if [[ $np_per_node -gt $ncores_per_instance_per_node ]]; then
+if [[ $np_per_node -gt $ncores_per_subjob_per_node ]]; then
     echo "Warning: mpinp/ompnp per node should be equal or less than the number of cores per node for a subjob"
     echo "mpinp/ompnp (/subjob/node)     : $np_per_node"
-    echo "number of cores (/subjob/node) : $ncores_per_instance_per_node"
+    echo "number of cores (/subjob/node) : $ncores_per_subjob_per_node"
     exit 127
 fi
 
@@ -304,7 +293,7 @@ if [[ $mpinp -gt 1 ]] && [[ $ompnp -gt 1 ]]; then
     exit 127
 fi
 
-if [[ $ompnp -gt 1 ]] && [[ $nnodes_per_instance -gt 1 ]]; then
+if [[ $ompnp -gt 1 ]] && [[ $nnodes_per_subjob -gt 1 ]]; then
     echo "Warning: OpenMP job cannot be parallized over multiple nodes"
     exit 127
 fi
@@ -345,22 +334,24 @@ echo "      cores         : $sched_ncores_per_array /array"
 echo "      nodes         : $sched_nnodes_per_array /array"
 echo
 echo "      * The size of each subjob"
-echo "      nodes         : $nnodes_per_instance /subjob"
-echo "      cores         : $ncores_per_instance /subjob"
-echo "                    : $ncores_per_instance_per_node /subjob/node"
+echo "      nodes         : $nnodes_per_subjob /subjob"
+echo "      cores         : $ncores_per_subjob /subjob"
+echo "                    : $ncores_per_subjob_per_node /subjob/node"
 echo "      mpinp         : $mpinp /subjob"
 echo "      ompnp         : $ompnp /subjob"
+echo "      np            : $np /subjob"
+echo "                    : $np_per_node /subjob/node"
 echo "      memory        : ${mem_per_core}M/core"
 echo 
 echo "      * The distirbution of subjobs"
-echo "      subjobs       : $ninstances_per_node /node"
-echo "                    : $ninstances_per_job /job"
-echo "                    : $ninstances_per_array /array"
-if [[ $np -lt $ncores_per_instance ]]; then
-echo "      underpopulate : $np_per_node /node out of $ncores_per_instance_per_node /node" 
+echo "      subjobs       : $nsubjobs_per_node /node"
+echo "                    : $nsubjobs_per_job /job"
+echo "                    : $nsubjobs_per_array /array"
+if [[ $np -lt $ncores_per_subjob ]]; then
+echo "      underpopulate : $np_per_node /node out of $ncores_per_subjob_per_node /node" 
 echo
 echo
-echo "    called as ( "${0##*/}" "$args" ) &>> spawn-batch.out"
+echo "    called as ( "${0##*/}" "${@}" ) &>> spawn-batch.out"
 fi
 
 
@@ -380,7 +371,7 @@ function genjob {
             echo "${schedopt}"
             #echo "${schedopt}" \
             #| sed "s/--cpus-per-task[[:print:]]*/--cpus-per-task=${ompnp}/" \
-            #| sed "s/--tasks-per-node=[[:print:]]*/--tasks-per-node=${ninstances_per_node}/"
+            #| sed "s/--tasks-per-node=[[:print:]]*/--tasks-per-node=${nsubjobs_per_node}/"
         else
            echo "${schedopt}"
         fi
@@ -440,11 +431,11 @@ function genjob {
             echo 'nodelist=$(scontrol show hostnames $SLURM_JOB_NODELIST)'
 		    echo 'templist=($nodelist)'
 
-            echo "for (( ni=0; ni<${sched_nnodes_per_job}; ni+=${nnodes_per_instance} ))"
+            echo "for (( ni=0; ni<${sched_nnodes_per_job}; ni+=${nnodes_per_subjob} ))"
             echo 'do'
 		    echo '    nodeid=""'
 		    echo '    tempid=""'
-		    echo '    for nj in `seq 1' ${nnodes_per_instance}'`'
+		    echo '    for nj in `seq 1' ${nnodes_per_subjob}'`'
             echo '    do'
 		    echo '        index=$(( ni + nj - 1 ))'
 		    echo '        tempid+="${templist[index]},"'
@@ -454,15 +445,14 @@ function genjob {
 
         elif [[ $sched == 'sge' ]]
         then
-            echo "for (( ni=0; ni<${sched_nnodes_per_job}; ni+=${nnodes_per_instance} ))"
+            echo "for (( ni=0; ni<${sched_nnodes_per_job}; ni+=${nnodes_per_subjob} ))"
             echo 'do'
             echo '    nodeid=""'
             echo '    nodeid=$(( ni + 1 ))'
         fi
             echo '    # loop over subjobs on each node'
-            echo "    for (( i=1; i<=${ninstances_per_node}; i++ ))"
+            echo "    for (( i=1; i<=${nsubjobs_per_node}; i++ ))"
             echo '    do'
-            echo '        sleep 0.1'
 
         # command lines for application
 
@@ -470,7 +460,7 @@ function genjob {
         if [[ $program == 'airss' || $program == 'crud' ]] && [[ $exe == 'castep' ]]; then
 
             [[ $sched == 'sge' ]] && launcher='mpirun -np '
-            [[ $sched == 'slurm' ]] && launcher='srun --nodelist=${nodeid} --exact --nodes='"${nnodes_per_instance}"' --cpus-per-task=1 --mem='"${mem_per_instance}"'M  --ntasks-per-node='"${ncores_per_instance_per_node}"'  --ntasks='
+            [[ $sched == 'slurm' ]] && launcher='srun --nodelist=${nodeid} --exact --nodes='"${nnodes_per_subjob}"' --cpus-per-task=1 --mem='"${mem_per_subjob}"'M  --ntasks-per-node='"${np_per_node}"'  --ntasks='
 
             echo "        ${cmdline}"' \'
             echo '            -launch "'${launcher}'" \'
@@ -480,7 +470,7 @@ function genjob {
         elif [[ $program == 'airss' || $program == 'crud' ]] && [[ $exe == 'repose' ]]; then
 
             [[ $sched == 'sge' ]] && launcher=''
-            [[ $sched == 'slurm' ]] && launcher='srun --nodelist=${nodeid} --exact --nodes=1 --ntasks=1 --ntasks-per-node=1 --cpus-per-task='"${ncores_per_instance}"' --mem='"${mem_per_instance}"'M'
+            [[ $sched == 'slurm' ]] && launcher='srun --nodelist=${nodeid} --exact --nodes=1 --ntasks=1 --ntasks-per-node=1 --cpus-per-task='"${np_per_node}"' --mem='"${mem_per_subjob}"'M'
 
             echo "        ${launcher}"' \'
             echo "        ${cmdline} &"
@@ -489,7 +479,7 @@ function genjob {
         elif [[ $program == 'forge' ]]; then
 
             [[ $sched == 'sge' ]] && launcher=''
-            [[ $sched == 'slurm' ]] && launcher='srun --nodelist=${nodeid} --exact --hint=nomultithread --distribution=block:block --nodes=1 --ntasks=1 --ntasks-per-node=1 --cpus-per-task='"${ncores_per_instance}"
+            [[ $sched == 'slurm' ]] && launcher='srun --nodelist=${nodeid} --exact --hint=nomultithread --distribution=block:block --nodes=1 --ntasks=1 --ntasks-per-node=1 --cpus-per-task='"${np_per_node}"
 
             echo "        ${launcher}"' \'
             echo "        ${cmdline}"'.${jids}.${nodeid}.${i}  < /dev/null \'
@@ -500,7 +490,7 @@ function genjob {
         elif [[ $program == 'flock' ]]; then
 
             [[ $sched == 'sge' ]] && launcher=''
-            [[ $sched == 'slurm' ]] && launcher='srun --nodelist=${nodeid} --exact --hint=nomultithread --distribution=block:block --nodes=1 --ntasks=1 --ntasks-per-node=1 --cpus-per-task='"${ncores_per_instance}"
+            [[ $sched == 'slurm' ]] && launcher='srun --nodelist=${nodeid} --exact --hint=nomultithread --distribution=block:block --nodes=1 --ntasks=1 --ntasks-per-node=1 --cpus-per-task='"${np_per_node}"
 
             echo "        ${launcher}"' \'
             echo "        ${cmdline} &"
@@ -815,5 +805,4 @@ done
 wait
 
 echo -e "\n    spawn-batch complete: $(date)\n"
-
 exit 0

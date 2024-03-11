@@ -42,7 +42,7 @@ function gen_chainbatch {
     
     # set defaults & get options
     sed -n '/^# set defaults/,/^# checks before proceeding/p' $chain | head -n -1 \
-        | sed    -e '/waitseconds/    s/60/10000/ ' \
+        | sed    -e '/waitseconds/    s/60/1000/ ' \
     >> $chain.temp
     
     # checks before proceeding
@@ -61,37 +61,46 @@ function gen_chainbatch {
 
     ## fullrand: generate data through full randomisation, and no relaxation
     sed -n '/^## generate data through full randomisation/,/^}/p' $chain \
-        | sed    -e "/airss.pl/      s/spawn airss.pl/spawn-batch ${opts} -command airss.pl -max \$full/ " \
-                 -e '/airss.pl/      s/$seed/$seed \&/ ' \
-                 -e '/despawn/       s/despawn/.\/despawn-batch/ ' \
+        | sed    -e "/airss.pl/      s/spawn airss.pl/( spawn-batch ${opts} -command airss.pl -max \$full/ " \
+                 -e '/airss.pl/      s/$seed/$seed ) \&>> spawn-batch.out \&/ ' \
+                 -e '/despawn/       s/despawn/.\/despawn-batch \&>> spawn-batch.out/ ' \
         >> $chain.temp
     echo >> $chain.temp
     
     ## markandjiggle: generate data by relaxation of marker structures using repose, and computing energy using castep
     sed -n '/^## generate data by relaxation of marker structures using repose/,/^}/p' $chain \
-        | sed    -e "/crud.pl/       s/spawn-slow/spawn-batch ${opts} -command/" \
-                 -e '/crud.pl/       s/$mpinp/$mpinp \&/' \
-                 -e '/despawn/       s/despawn/.\/despawn-batch/ ' \
+        | sed    -e "/crud.pl/       s/spawn-slow/( spawn-batch ${opts} -command/" \
+                 -e '/crud.pl/       s/$mpinp/$mpinp ) \&>> spawn-batch.out \&/' \
+                 -e '/despawn/       s/despawn/.\/despawn-batch \&>> spawn-batch.out/ ' \
         >> $chain.temp
     echo >> $chain.temp
     
     ## relaxandjiggle: generate data by relaxation of random structures using repose, and computing energy using castep
     sed -n '/^## generate data by relaxation of random structures using repose/,/^}/p' $chain \
         | sed -n -e '1,/shaking structures .../p' | head -n -1 \
-        | sed    -e "/airss.pl/      s/spawn airss.pl/spawn-batch ${opts} -command airss.pl -max \$minima -keep/" \
-                 -e '/airss.pl/      s/$seed/$seed \&/ ' \
+        | sed    -e "/airss.pl/      s/spawn airss.pl/( spawn-batch ${opts} -command airss.pl -max \$minima -keep/" \
+                 -e '/airss.pl/      s/$seed/$seed ) \&>> spawn-batch.out \&/ ' \
                  -e '/SECONDS/       s/SECONDS/ntrial/' \
                  -e '/counter=`/     a \        nfail=$(ls trash/*.err 2> /dev/null | wc -l)\ ' \
                  -e '/counter=`/     a \        ntrial=$((counter + nfail))\ ' \
                  -e '/echo -n -e/    s/$/" (# trials: $ntrial)"/' \
-                 -e '/despawn/       s/despawn/.\/despawn-batch/' \
+                 -e '/despawn/       s/despawn/.\/despawn-batch \&>> spawn-batch.out/' \
                  -e '$               i \    rm -rf trash' \
         >> $chain.temp
     sed -n '/^## generate data by relaxation of random structures using repose/,/^}/p' $chain \
-        | sed -n -e '/shaking structures .../,$p' \
-        | sed    -e '/despawn/       s/despawn/.\/despawn-batch/' \
-                 -e "/crud.pl/       s/spawn-slow/spawn-batch ${opts} -command/" \
-                 -e '/crud.pl/       s/$mpinp/$mpinp \&/' \
+        | sed -n -e '/shaking structures .../,/launching crud .../p' | head -n -1 \
+        | sed    -e '/despawn/       s/despawn/.\/despawn-batch \&>> spawn-batch.out/' \
+                 -e "/crud.pl/       s/spawn-slow/( spawn-batch ${opts} -command/" \
+                 -e '/crud.pl/       s/$mpinp/$mpinp ) \&>> spawn-batch.out \&/' \
+        >> $chain.temp
+    sed -n '/^## generate data by relaxation of random structures using repose/,/^}/p' $chain \
+        | sed -n -e '/launching crud .../,$p' \
+        | sed    -e '/despawn/       s/despawn/.\/despawn-batch \&>> spawn-batch.out/' \
+                 -e "/crud.pl/       s/spawn-slow/( spawn-batch ${opts} -command/" \
+                 -e '/crud.pl/       s/$mpinp/$mpinp ) \&>> spawn-batch.out \&/' \
+                 -e '/counter=`/     a \        ngood=$(ls good_castep/*.res 2> /dev/null | wc -l)\ ' \
+                 -e '/counter=`/     a \        nbad=$(ls bad_castep/*.res 2> /dev/null | wc -l)\ ' \
+                 -e '/echo -n -e/    s/$/" (# good_castep: $ngood, # bad_castep: $nbad)"/' \
         >> $chain.temp
     echo >> $chain.temp
     
@@ -100,25 +109,29 @@ function gen_chainbatch {
         | sed    -e '/let numjobs/       s/let/#let/ ' \
                  -e '/let numpot/        s/let/#let/ ' \
                  -e '/let maxpot/        s/let/#let/ ' \
-                 -e '/frankm/            s/ssh -x $remotenode "cd $rootdir ; /spawn-batch -despawn -command "/' \
-                 -e '/franks/            s/ssh -x $remotenode "cd $rootdir ; /spawn-batch -despawn -command "/' \
+                 -e '/frankm/            s/ssh -x $remotenode "cd $rootdir ; /( spawn-batch -despawn -command "/' \
+                 -e '/frankm/            s/null"/null" ) \&>> spawn-batch.out/' \
+                 -e '/franks/            s/ssh -x $remotenode "cd $rootdir ; /( spawn-batch -despawn -command "/' \
+                 -e '/franks/            s/null"/null" ) \&>> spawn-batch.out/' \
                  -e '/forge $esflag/         s/-numpot $numpot/-numpot $minpot/ ' \
-                 -e '/forge $esflag/'"         s/farm/farm-batch ${opts} -command/ " \
-                 -e '/forge $esflag/         s/$seed\/$seed/$seed\/$seed \&/ ' \
+                 -e '/forge $esflag/'"         s/farm/( farm-batch ${opts} -command/ " \
+                 -e '/forge $esflag/         s/$seed\/$seed/$seed\/$seed  ) \&>> spawn-batch.out \&/ ' \
                  -e "/echo '    maximum/ s/echo/#echo/ " \
                  -e '/let waitpot/       s/let/#let/ ' \
                  -e "/echo '    waiting/ s/echo/#echo/ " \
                  -e '/until/             s/waitpot/minpot/ ' \
-                 -e '/defarm/            s/defarm/.\/defarm-batch/ ' \
+                 -e '/defarm/            s/defarm/.\/defarm-batch \&>> spawn-batch.out/ ' \
                  -e '/counter=`grep/     s/counter/#counter/ ' \
                  -e '/counter=`grep/     a \        counter=`ls $seed/*.ddp 2> /dev/null | wc -l`' \
-		         -e '/flock -ompnp/      s/ssh -x $remotenode "cd $rootdir ; /spawn-batch -despawn -command "/ ' \
+                 -e '/gotpot=/           i \    grep -L "power" $seed/*.ddp 2> /dev/null | xargs rm -f' \
+		         -e '/flock -ompnp/      s/ssh -x $remotenode "cd $rootdir ; /( spawn-batch -despawn -command "/ ' \
 		         -e '/flock -ompnp/      s/remotecores/ompnp/ ' \
-                 -e '/flock -ompnp/      a \    dir=$(date +%y%m%d-%H%M%S)-flock' \
-                 -e '/flock -ompnp/      a \    mkdir $dir' \
-                 -e '/flock -ompnp/      a \    cp flock-* $dir' \
-                 -e '/flock -ompnp/      a \    cp -R $seed{,.cell,.param,.eddp} data.res* $dir' \
-                 -e '/flock -ompnp/      a \    sleep 1' \
+		         -e '/flock -ompnp/      s/out"/out" ) \&>> spawn-batch.out/ ' \
+                 -e '/cat flock.out/      a \    dir=$(date +%y%m%d-%H%M%S)-flock' \
+                 -e '/cat flock.out/      a \    mkdir $dir' \
+                 -e '/cat flock.out/      a \    cp -R plots flock.out $dir' \
+                 -e '/cat flock.out/      a \    cp -R $seed{,.cell,.param,.eddp} data.res* $dir' \
+                 -e '/cat flock.out/      a \    sleep 1' \
         >> $chain.temp
     echo >> $chain.temp
 
