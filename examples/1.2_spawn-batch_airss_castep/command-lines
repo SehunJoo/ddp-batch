@@ -1,0 +1,13 @@
+#!/bin/bash
+
+./clean
+
+# test 1
+( spawn-batch -despawn -command airss.pl -mpinp 4 -step 0 -seed Li -max 200 ) &> spawn-batch.out &
+
+#nohup spawn-batch -despawn -np 128 -command airss.pl -mpinp 4 -step 0 -seed Li -max 20 &
+
+# test 2
+#nohup spawn-batch -bakres mv -despawn -command airss.pl -mpinp 4 -step 0 -seed Li -max 600 &
+
+exit 0
