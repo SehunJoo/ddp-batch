@@ -42,7 +42,7 @@ counter=1
 
 echo "    starting job ${jobid} monitoring ..."
 
-touch ./status.${jobid}.job
+touch ./status.job.${jobid}
 
 sleep 10
 
@@ -55,11 +55,11 @@ do
     # count the number of jobs
 
     if [[ $SECONDS -ge 120 ]]; then
-        $cmdline > ./status.${jobid}.job
+        $cmdline > ./status.job.${jobid}
         exit_status=$?
 
         if [[ $exit_status -eq 0 ]]; then
-            counter=$(cat ./status.${jobid}.job | wc -l)
+            counter=$(cat ./status.job.${jobid} | wc -l)
             [[ $counter -eq 0 ]] && break
             #echo -e -n "\r    ${counter} jobs pending/running"
         else
@@ -73,7 +73,7 @@ do
     sleep 1
 done
 
-touch done.${jobid}
+touch done.job.${jobid}
 
 echo "    job ${jobid} complete"
 

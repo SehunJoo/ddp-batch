@@ -1,0 +1,40 @@
+#!/bin/bash
+
+    if [[ $program == "airss" && $bakres != "none" ]]
+    then
+        (
+            echo '# backup data -input & output files'
+            echo
+            echo 'rm -f $seed-*.{cell,param,res.temp,cell.temp} &'
+            echo 'find . -maxdepth 1 -type f -name "$seed-*.res" -empty -delete &'
+            echo 'find . -maxdepth 1 -type f -name "$seed-*.res" | xargs grep -s -L TITL | xargs rm -f &'
+            echo 'find . -maxdepth 1 -type f -name "$seed-*.res" | xargs grep -s -L END  | xargs rm -f &'
+            echo 'wait'
+            echo
+            echo 'find . -maxdepth 1 -type f -name "$seed-*.res" | shuf | head -n -'$max' | xargs -r rm'
+            echo
+            echo 'cp $seed.{cell,param}       ${backupdir} 2>/dev/null'
+            echo 'cp -r $seed{,.eddp}         ${backupdir} 2>/dev/null'
+            echo 'mv trash                    ${backupdir} 2>/dev/null'
+            [[ $bakres == 'mv' ]] && echo 'find . -maxdepth 1 -type f -name "$seed-*.*" -exec mv -t ${backupdir} {} \+'
+            [[ $bakres == 'cp' ]] && echo 'find . -maxdepth 1 -type f -name "$seed-*.*" -exec cp -t ${backupdir} {} \+'
+            echo
+        ) >> despawn-batch 
+    
+    elif [[ $program == "crud" && $bakres != "none" ]]
+    then
+        (
+            echo 'cp *.{cell,param}       ${backupdir} 2>/dev/null'
+            [[ $bakres == 'mv' ]] && echo 'mv    bad_castep good_castep hopper ${backupdir} 2>/dev/null'
+            [[ $bakres == 'cp' ]] && echo 'cp -R bad_castep good_castep hopper ${backupdir} 2>/dev/null'
+            echo
+        ) >> despawn-batch
+
+    elif [[ $program == "forge" && $bakres != "none" ]]
+    then
+        (
+            echo 'cp -R ${seed} data.res ${backupdir} 2>/dev/null'
+            echo
+        ) >> despawn-batch
+    fi
+

@@ -1,0 +1,19 @@
+#!/bin/bash
+
+set -e
+
+if [ $# -ne 1 ]; then
+    echo 1>&2 "Usage: $(basename $0) <seed>"
+    exit 127
+fi
+
+# Get arguments
+
+seed=$1
+
+for f in $seed-*.cell; do
+    seedairss=${f%%.cell}
+    [[ ! -f $seedairss.res ]] && rm -f $seedairss.*
+done
+
+exit 0

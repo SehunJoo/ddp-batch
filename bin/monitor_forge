@@ -29,23 +29,22 @@
 
 set -e
 
-if [ $# -ne 3 ]; then
-    echo 1>&2 "Usage: $(basename $0) <jobid> <seed> <numpot>"
+if [ $# -ne 2 ]; then
+    echo 1>&2 "Usage: $(basename $0) <seed> <numpot>"
     exit 127
 fi
 
 # Get arguments
 
-jobid=$1
-seed=$2
-numpot=$3
+seed=$1
+numpot=$2
 
 
 # check the number of potential generated (./$seed/*.ddp files)'
 
 echo "    starting forge monitoring ..."
 
-touch ./status.${jobid}.forge
+touch ./status.forge
 
 counter=0
 counterddp=0
@@ -55,10 +54,10 @@ do
     counter=$(grep "testing:   testing" ${seed}/*.out 2> /dev/null | wc -l)
     counterddp=$(ls ${seed}/*.ddp 2> /dev/null | wc -l)
 
-    sed -i "/check_time/d"                                     ./status.${jobid}.forge
-    sed -i "/no. potentials/d"                                 ./status.${jobid}.forge
-    echo "check_time:         $(date +%Y-%m-%d\ %H:%M:%S)"  >> ./status.${jobid}.forge
-    echo "no. potentials:     ${counterddp}"                >> ./status.${jobid}.forge
+    sed -i "/check_time/d"                                     ./status.forge
+    sed -i "/no. potentials/d"                                 ./status.forge
+    echo "check_time:         $(date +%Y-%m-%d\ %H:%M:%S)"  >> ./status.forge
+    echo "no. potentials:     ${counterddp}"                >> ./status.forge
 
     SECONDS=0
     until [[ $SECONDS -ge 5 ]]
