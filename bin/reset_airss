@@ -16,4 +16,16 @@ for f in $seed-*.cell; do
     [[ ! -f $seedairss.res ]] && rm -f $seedairss.*
 done
 
+# AIRSS - castep
+#rm -f $seed-*{.cell,.param}
+#rm -f $seed-*{.castep,.err,.conv}
+#rm -f $seed-*{.castep,.cell.temp,.conv,.-out.cell,.out.cell.temp,.res.temp}
+
+# AIRSS - repose
+#rm -f $seed-*{.cell,.eddp,.par}
+#rm -f $seed-*{.castep,.err,.rout}
+#rm -f $seed-*{.cell.temp,.res.temp}
+
+rm -f sed??????
+
 exit 0
