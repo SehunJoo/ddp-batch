@@ -257,9 +257,6 @@ cp $(which chain) ./
 
 gen_chainbatch
 
-chainbatch='chain-batch-bakres'
-opts="-bakres cp"
-gen_chainbatch
 
 #gen_chainbatch_franks
 #gen_chainbatch_forge
