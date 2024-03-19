@@ -1,0 +1,70 @@
+#!/bin/bash -l
+
+#$ -N castep
+#$ -ac allow=A
+#$ -pe mpi 40
+#$ -t 1-1
+#$ -l mem=4G
+#$ -l h_rt=48:00:00
+#$ -A Faraday_FCAT
+#$ -P Free
+#$ -cwd
+#$ -S /bin/bash
+#$ -M shj29@cam.ac.uk
+#$ -m beas
+##$ -m n
+
+# --------------------------------------------------
+
+set -e
+
+##timestep in fs
+seed='HSc-H4Sc-1-I4mmm'
+timestep=0.5 # fs
+temperature=2000 # K
+pressure=250 # GPa
+steps=2000000
+
+##convert to natural units for ramble
+timestep_ramble=$(bc <<< "scale=7;0.0982269158*$timestep")
+temperature_initial=$(bc <<< "scale=7;$temperature/2")
+
+# pressure, temperature, ensemble
+# step, timestep
+# output
+ramble -mpinp 40 -natom 600 \
+        -p ${pressure} -ti ${temperature_initial} -tt ${temperature} -dr 0.01 \
+        -m ${steps} -ts ${timestep_ramble} \
+        -t -te 10 \
+        -s ${seed} 1> ${seed}.out 2> ${seed}.err
+
+
+# PRB 352 atoms /  at 150/300 GPa at 700/800/900/1000 K / 5ps 
+# PRB(2023) 1000/1500/2000/2500/3000 K / 2ps
+
+
+#   -mpinp : Number of threads
+#   -t     : Track dynamics
+#   -te    : Track every N steps
+#   -dr    : Damping rate
+#   -ts    : Time step
+#   -ti    : Initial temperature
+#   -tt    : Target temperature
+#   -q     : Minimal output
+#   -m     : Max number of steps
+#   -n     : Number of steps for running average
+#   -v     : Volume overide
+#   -p     : Pressure
+#   -f     : Fix unit cell
+#   -mc    : Map to cell
+#   -c     : Cluster
+#   -tol   : Convergence thresold
+#   -r     : Hard core radius
+#   -a     : Hard core strength
+#   -rmin  : Minimum tolerated contact
+#   -ncell : Number of cells in supercell
+#   -natom : Number of atoms in supercell
+#   -scmax : Maximum attempts to construct supercell
+#   -h     : Display this message
+ 
+

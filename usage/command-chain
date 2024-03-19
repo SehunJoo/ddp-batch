@@ -1,0 +1,53 @@
+#!/bin/bash
+
+seed='LiNiO'
+opts="-M 40  -O 4"                   # number of cores 
+
+#==============================================================================
+# dataset construction
+#==============================================================================
+
+## random structurese
+opts="${opts} -f 1000"                # number of random structures (1000)
+
+## marker structures
+opts="${opts} -J 100"                 # number of jiggles of marker (100)
+
+## local minima structures
+opts="${opts} -n 5"                   # number of cycles (5)
+opts="${opts} -m 100"                 # number of local minima structures (100)
+opts="${opts} -p 0.1 -l 0.0001 -R"    # pressure  (0.001, 0.0, false)
+opts="${opts} -d 0.0   -w 1000"       # deviation bias, trials (0.0, 1000)
+opts="${opts} -j 10"                  # number of jiggles of local minima (10)
+opts="${opts} -a 0.02"                # amplitude for jiggling (0.02)
+#opts="${opts} -T none -S 1 -t 10"    # thermalising
+
+## filter
+opts="${opts} -D 0"                   # number of data (0)
+opts="${opts} -E 10.0"                # energy window (10.0)
+
+#==============================================================================
+# EDDP feature vector
+#==============================================================================
+
+opts="${opts} -r 5.5"                 # cutoff for features (3.75)
+opts="${opts} -B 3"                   # highest body order (3)
+opts="${opts} -P 5 -L 2 -H 10"        # polynomials (5, 2, 10)
+#opts="${opts} -A"
+
+#==============================================================================
+# neural network
+#==============================================================================
+
+opts="${opts} -N 5 -C 1.0 -F 256"     # (5, 1.0, 0)
+#opts="${opts} -u 0"                  # size of composition embedding space (0)
+
+########
+# MAIN #
+########
+
+nohup ./chain-batch ${opts} -s $seed &
+#nohup chain-batch-bakres ${opts} -s $seed &
+
+echo $! > .pid
+

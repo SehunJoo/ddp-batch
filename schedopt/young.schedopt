@@ -1,0 +1,59 @@
+%block default
+#$ -N default
+#$ -pe mpi 40
+#$ -t 1-20
+#$ -l mem=4G
+#$ -l h_rt=48:00:00
+#$ -A UKCP_CAM_M
+#$ -P Gold
+#$ -cwd
+#$ -S /bin/bash
+
+ncores_per_node=40      # number of cores to be used / for underpopulation of nodes, you can specify fewer processes than cores on compute nodes
+mem_per_core=4096       # memory per core in M
+%endblock default
+
+%block airss
+#$ -N airss
+#$ -pe mpi 40
+#$ -t 1-20
+#$ -l mem=4G
+#$ -l h_rt=48:00:00
+#$ -A UKCP_CAM_M
+#$ -P Gold
+#$ -cwd
+#$ -S /bin/bash
+
+ncores_per_node=40      # number of cores to be used / for underpopulation of nodes, you can specify fewer processes than cores on compute nodes
+mem_per_core=4096       # memory per core in M
+%endblock airss
+
+%block crud
+#$ -N crud
+#$ -pe mpi 40
+#$ -t 1-20
+#$ -l mem=4G
+#$ -l h_rt=48:00:00
+#$ -A UKCP_CAM_M
+#$ -P Gold
+#$ -cwd
+#$ -S /bin/bash
+
+ncores_per_node=40      # number of cores to be used / for underpopulation of nodes, you can specify fewer processes than cores on compute nodes
+mem_per_core=4096       # memory per core in M
+%endblock crud
+
+%block forge
+#$ -N forge
+#$ -pe mpi 40
+#$ -t 1-20
+#$ -l mem=4G
+#$ -l h_rt=48:00:00
+#$ -A UKCP_CAM_M
+#$ -P Gold
+#$ -cwd
+#$ -S /bin/bash
+
+ncores_per_node=40      # number of cores to be used / for underpopulation of nodes, you can specify fewer processes than cores on compute nodes
+mem_per_core=4096       # memory per core in M
+%endblock forge

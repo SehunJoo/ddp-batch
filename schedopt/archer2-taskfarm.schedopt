@@ -1,0 +1,154 @@
+## ======================================================================================
+## Archer2 - QoS=taskfarm
+##
+##   Max Nodes Per Job   : 16      (#SBATCH --nodes=16)
+##   Max Walltime        : 24 hrs  (#SBATCH --time=24:00:00)
+##   Max Jobs Running    : 32      (#SBATCH --array=1-32)
+##   Notes               : Maximum of 256 nodes in use by any one user at any time
+##                         --nodes=16 --array=1-16
+##                         --nodes=8  --array=1-32
+##  --hint=nomultithread : do not use hyperthreads/SMP; only use physical cores
+##  --distribution=block:block :  allocate processes to cores in a sequential fasion
+##      the first block means use a block distribution of processes across nodes 
+##      (i.e. fill nodes before moving onto the next one)
+##      the second block means use a block distribution of processes across "sockets" within a node
+##      (i.e. fill a "socket" before moving on to the next one)
+## ======================================================================================
+## Additional parameters
+##
+##   ncores_per_node   : number of cores on a node (128 for Archer2)
+##   nnodes_per_subjob : number of nodes you want to allocate to a single subjob
+##   ncores_per_subjob : number of cores you want to allocate to a single subjob
+##   mem_per_core      : memory per core in M (1500 for Archer2)
+## ======================================================================================
+## Example
+## --------------------------------------------------------------------------------------
+##   small job - multiple subjobs per single node
+##     nnodes_per_subjob=1      
+##     ncores_per_subjob=4
+## --------------------------------------------------------------------------------------
+##   medium job - single subjob per single node
+##     nnodes_per_subjob=1      
+##     ncores_per_subjob=128
+## --------------------------------------------------------------------------------------
+##   large job - single subjob per multiple nodes
+##     nnodes_per_subjob=4
+##     ncores_per_subjob=512
+## ======================================================================================
+
+
+%block default
+#SBATCH --job-name=default
+#SBATCH --time=24:00:00
+#SBATCH --nodes=8
+#SBATCH --tasks-per-node=128
+#SBATCH --cpus-per-task=1
+#SBATCH --array=1-32
+
+#SBATCH --account=e89-camm
+#SBATCH --partition=standard
+#SBATCH --qos=taskfarm
+
+ncores_per_node=128
+nnodes_per_subjob=1
+ncores_per_subjob=128
+mem_per_core=1500
+%endblock default
+
+
+%block airss
+#SBATCH --job-name=airss
+#SBATCH --time=24:00:00
+#SBATCH --nodes=8
+#SBATCH --tasks-per-node=128
+#SBATCH --cpus-per-task=1
+#SBATCH --array=1-32
+
+#SBATCH --account=e89-camm
+#SBATCH --partition=standard
+#SBATCH --qos=taskfarm
+
+ncores_per_node=128
+nnodes_per_subjob=8
+ncores_per_subjob=1024
+mem_per_core=1500
+%endblock airss
+
+
+%block crud
+#SBATCH --job-name=crud
+#SBATCH --time=24:00:00
+#SBATCH --nodes=8
+#SBATCH --tasks-per-node=128
+#SBATCH --cpus-per-task=1
+#SBATCH --array=1-32
+
+#SBATCH --account=e89-camm
+#SBATCH --partition=standard
+#SBATCH --qos=taskfarm
+
+ncores_per_node=128
+nnodes_per_subjob=8
+ncores_per_subjob=1024
+mem_per_core=1500
+%endblock crud
+
+
+## Note: GNU-parallel job / single node / short
+%block franks
+#SBATCH --job-name=franks
+#SBATCH --time=00:20:00
+#SBATCH --nodes=1
+#SBATCH --tasks-per-node=128
+#SBATCH --cpus-per-task=1
+#SBATCH --array=1-1
+
+#SBATCH --account=e89-camm
+#SBATCH --partition=standard
+#SBATCH --qos=short
+
+ncores_per_node=128
+nnodes_per_subjob=1
+ncores_per_subjob=128
+mem_per_core=1500
+%endblock franks
+
+
+## Note: OpenMP job
+%block forge
+#SBATCH --job-name=forge
+#SBATCH --time=24:00:00
+#SBATCH --nodes=8
+#SBATCH --tasks-per-node=1
+#SBATCH --cpus-per-task=128
+#SBATCH --array=1-32
+
+#SBATCH --account=e89-camm
+#SBATCH --partition=standard
+#SBATCH --qos=taskfarm
+
+ncores_per_node=128
+nnodes_per_subjob=1
+ncores_per_subjob=128
+mem_per_core=1500
+%endblock forge
+
+
+## Note: OpenMP job / single node / short
+%block flock
+#SBATCH --job-name=flock
+#SBATCH --time=00:20:00
+#SBATCH --nodes=1
+#SBATCH --tasks-per-node=1
+#SBATCH --cpus-per-task=128
+#SBATCH --array=1-1
+
+#SBATCH --account=e89-camm
+#SBATCH --partition=standard
+#SBATCH --qos=short
+
+ncores_per_node=128
+nnodes_per_subjob=1
+ncores_per_subjob=128
+mem_per_core=1500
+%endblock flock

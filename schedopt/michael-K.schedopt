@@ -1,0 +1,75 @@
+%block default
+#$ -N default
+#$ -ac allow=K
+#$ -pe mpi 72
+#$ -t 1-40
+#$ -l mem=4G
+#$ -l h_rt=48:00:00
+#$ -A Faraday_FCAT
+#$ -P Gold
+#$ -cwd
+#$ -S /bin/bash
+#$ -m n
+
+ncores_per_node=24    # total number of cores on a node (machine-dependent)
+nnodes_per_subjob=3   # total number of nodes you want to allocate to a single subjob
+ncores_per_subjob=72  # total number of cores you want to allocate to a single subjob
+mem_per_core=4096     # memory per core in M
+%endblock default
+
+%block airss
+#$ -N airss
+#$ -ac allow=K
+#$ -pe mpi 72
+#$ -t 1-40
+#$ -l mem=4G
+#$ -l h_rt=48:00:00
+#$ -A Faraday_FCAT
+#$ -P Gold
+#$ -cwd
+#$ -S /bin/bash
+#$ -m n
+
+ncores_per_node=24
+nnodes_per_subjob=3
+ncores_per_subjob=72
+mem_per_core=4096
+%endblock airss
+
+%block crud
+#$ -N crud
+#$ -ac allow=K
+#$ -pe mpi 72
+#$ -t 1-40
+#$ -l mem=4G
+#$ -l h_rt=48:00:00
+#$ -A Faraday_FCAT
+#$ -P Gold
+#$ -cwd
+#$ -S /bin/bash
+#$ -m n
+
+ncores_per_node=24
+nnodes_per_subjob=3
+ncores_per_subjob=72
+mem_per_core=4096
+%endblock crud
+
+%block forge
+#$ -N forge
+#$ -ac allow=K
+#$ -pe mpi 72
+#$ -t 1-40
+#$ -l mem=4G
+#$ -l h_rt=48:00:00
+#$ -A Faraday_FCAT
+#$ -P Gold
+#$ -cwd
+#$ -S /bin/bash
+#$ -m n
+
+ncores_per_node=24
+nnodes_per_subjob=3
+ncores_per_subjob=72
+mem_per_core=4096
+%endblock forge
