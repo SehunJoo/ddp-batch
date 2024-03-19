@@ -654,7 +654,7 @@ function genpot {
     mkdir $dir
     cp -R plots flock.out $dir
     cp -R $seed{,.cell,.param,.eddp} data.res* $dir
-    cp -R jobinfo $dir && rm -rf jobinfo
+    cp -R jobinfo spawn-batch.out $dir && rm -rf jobinfo spawn-batch.out
     sleep 1
 
     wait
