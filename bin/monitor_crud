@@ -54,6 +54,8 @@ do
     seconds_cryan=$((seconds_cryan + SECONDS))
     SECONDS=0
 
+    # Check process (every 5 seconds)
+
     if [[ $seconds_count -ge 5 ]]; then
         counter=$(find . ./hopper -maxdepth 1 -type f -name "*.res" | sed "/data.res/d" | wc -l)
 
@@ -66,6 +68,7 @@ do
         if ls bad_castep/*.res &>/dev/null; then
             cd ./bad_castep
             for seed in $(ls *.res | sed 's/.res$//'); do
+                find . -name "$seed.*.err" -size 0 -delete
                 if ls $seed.*.err &>/dev/null; then
                     pattern='wave_orthonormalise_overlap_wv_ks'
                     dir='orthonormalise'
@@ -76,6 +79,11 @@ do
                     pattern='need to have at least 1 plane wave on each process'
                     dir='others'
                     [[ $(grep -i "${pattern}" $seed.*.err | wc -l) -gt 0 ]] && mkdir -p $dir && mv $seed.* $dir && continue
+                elif [[ -f $seed.castep ]]; then
+                    echo $seed
+                    pattern='electronic minimisation did not converge when finding ground state'
+                    dir='scf'
+                    [[ $(grep -i "${pattern}" $seed.castep | wc -l) -gt 0 ]] && mkdir -p $dir && mv $seed.* $dir && continue
                 else
                     [ ! -f $seed.castep ] && mv $seed.res ../hopper && rm -f $seed.{cell,par,param}
                 fi
@@ -97,6 +105,8 @@ do
         seconds_count=0
     fi
 
+    # Print intermediate results (every 60 seconds)
+
     if [[ $seconds_cryan -ge 60 ]]; then
         if [[ -d good_castep ]]; then
             ( cat good_castep/*.res | cryan -l -r 2>/dev/null > ./status.crud.cryan ) </dev/null &>/dev/null &
@@ -109,6 +119,10 @@ do
         echo '    stopping airss monitoring ...'
         exit 0
     fi
+
+    rm -f crud.pe* crud.po*
+    find . -name "crud.e*" -size 0 -delete
+    find . -name "crud.o*" -size 0 -delete
 
     sleep 1
 done
