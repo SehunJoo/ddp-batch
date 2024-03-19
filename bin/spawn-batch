@@ -33,13 +33,11 @@ set -e
 
 function usage {
     echo 1>&2
-    echo 1>&2 "usage: $(basename $0)  [-despawn] [-bakres mode] [-command commandline]"
+    echo 1>&2 "usage: $(basename $0)  [-despawn] [-command commandline]"
     echo 1>&2
     echo 1>&2 '    [OPTION]                     [DESCRIPTION]'
     echo 1>&2
     echo 1>&2 '    [-despawn]                   auto-run despawn-batch (default false)'
-    echo 1>&2 '    [-bakres   mode]             mode of backup result, mode = none|cp|mv (default none)'
-    echo 1>&2 '                                 copy/move input & output files to newly created backup directory '
     echo 1>&2
     echo 1>&2 '    [-command  commandline]      command line for running application'
     echo 1>&2 '                                 this option should be located at the end of command line'
@@ -289,7 +287,6 @@ echo "      command       : $cmdline"
 echo "      program       : $program"
 echo "      seed          : $seed"
 echo "      despawn       : $despawn"
-echo "      bakres        : $bakres"
 [[ $program == "airss" ]] && echo "      max           : $max"
 [[ $program == "forge" ]] && echo "      numpot        : $numpot"
 echo
