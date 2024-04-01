@@ -77,6 +77,10 @@ do
         exit 0
     fi
 
+    rm -f airss.pe* airss.po*                                                                                             
+    find . -name "airss.e*" -size 0 -delete                                                                              
+    find . -name "airss.o*" -size 0 -delete  
+
     sleep 1
 
 done

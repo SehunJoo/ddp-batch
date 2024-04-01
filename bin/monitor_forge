@@ -66,6 +66,11 @@ do
         [[ -f ./STOP        ]] && echo '    stopping forge monitoring ...' && exit 0
         sleep 1
     done
+
+    rm -f forge.pe* forge.po*                                                                                           
+    find . -name "forge.e*" -size 0 -delete                                                                             
+    find . -name "forge.o*" -size 0 -delete   
+
 done
 
 sleep 1
