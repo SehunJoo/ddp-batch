@@ -131,7 +131,7 @@ function gen_chainbatch {
                  -e '/cat flock.out/      a \    mkdir $dir' \
                  -e '/cat flock.out/      a \    cp -R plots flock.out $dir' \
                  -e '/cat flock.out/      a \    cp -R $seed{,.cell,.param,.eddp} data.res* $dir' \
-                 -e '/cat flock.out/      a \    cp -R jobinfo spawn-batch.out $dir && rm -rf jobinfo spawn-batch.out' \
+                 -e '/cat flock.out/      a \    cp -R jobinfo spawn-batch.out $dir && rm -rf jobinfo nohup.out' \
                  -e '/cat flock.out/      a \    sleep 1' \
         >> $chain.temp
     echo >> $chain.temp
