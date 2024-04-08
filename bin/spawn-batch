@@ -33,13 +33,11 @@ set -e
 
 function usage {
     echo 1>&2
-    echo 1>&2 "usage: $(basename $0)  [-despawn] [-bakres mode] [-command commandline]"
+    echo 1>&2 "usage: $(basename $0)  [-despawn] [-command commandline]"
     echo 1>&2
     echo 1>&2 '    [OPTION]                     [DESCRIPTION]'
     echo 1>&2
     echo 1>&2 '    [-despawn]                   auto-run despawn-batch (default false)'
-    echo 1>&2 '    [-bakres   mode]             mode of backup result, mode = none|cp|mv (default none)'
-    echo 1>&2 '                                 copy/move input & output files to newly created backup directory '
     echo 1>&2
     echo 1>&2 '    [-command  commandline]      command line for running application'
     echo 1>&2 '                                 this option should be located at the end of command line'
@@ -57,14 +55,18 @@ fi
 despawn='false'
 bakres='none'
 genjob='false'
+opt_np=1
+opt_nnodes=1
 cmdline=''
 mpinp=1
+ompnp=1
 seed=''
 max=1000000    # default $opt_max  in airss.pl
 exe='castep'   # default $opt_exec in airss.pl
 numpot='256'   # default 
 
 
+args=$(echo ${@})
 # Parse arguments
 
 while [ $# -ge 1 ] ; do
@@ -77,6 +79,12 @@ while [ $# -ge 1 ] ; do
             ;;
         -bakres)
             bakres=$2; shift 2
+            ;;
+        -np)
+            opt_np=$2; shift 2
+            ;;
+        -nnodes)
+            opt_nnodes=$2; shift 2
             ;;
         -command)
             shift 1; cmdline=$*;
@@ -160,8 +168,8 @@ if [[ -f STOP ]]; then
     exit 127
 fi
 
-if [[ $(ls *.schedopt | wc -l) -ne 1 ]]; then
-    echo "There should be one *.schedopt file"
+if [[ $(ls ./.schedopt | wc -l) -ne 1 ]]; then
+    echo "There should be .schedopt file"
     exit 127
 fi
 
@@ -169,7 +177,7 @@ fi
 
 # Read *.schedopt file and get options for scheduler
 
-optfile=$(ls *.schedopt)
+optfile="./.schedopt"
 schedopt=$(cat $optfile | sed 's/##[[:print:]]*//g' | sed "/^%block ${program}/,/^%endblock ${program}/!d;//d" )
 [ -z "$schedopt" ] &&  schedopt=$(cat $optfile  | sed '/^%block default/,/^%endblock default/!d;//d')
 
@@ -191,7 +199,6 @@ else
     echo "sge | slurm is only available"
     exit 127
 fi
-
 
 
 # Specify the amount of computational resources to request
@@ -226,78 +233,41 @@ then
 fi
 
 
+# actual size of subjobs
 
-# Specify the size of subjobs
+cmd_np=$((mpinp * ompnp))
+[[ $program == 'franks' ]] && cmd_np=$sched_ncores_per_node
+[[ $program == 'flock' ]] && cmd_np=$sched_ncores_per_node
+cmd_nnodes=$(((cmd_np - 1) / sched_ncores_per_node + 1))
 
-nnodes_per_subjob=$(echo "$nonschedopt" | grep 'nnodes_per_subjob' | awk 'BEGIN {FS="="} {print $2}' | awk '{print $1}')
-[[ -z $nnodes_per_subjob ]] && nnodes_per_subjob=1
-ncores_per_subjob=$(echo "$nonschedopt" | grep 'ncores_per_subjob' | awk 'BEGIN {FS="="} {print $2}' | awk '{print $1}')
-[[ -z $ncores_per_subjob ]] && ncores_per_subjob=$sched_ncores_per_node
-ncores_per_subjob_per_node=$(( ($ncores_per_subjob + $nnodes_per_subjob - 1) / $nnodes_per_subjob ))
+echo "$cmd_np $cmd_nnodes"
 
-# actual size of subjobs (underpopulation)
-
-np=$(( $mpinp * $ompnp ))
-np_per_node=$(( ($np + $nnodes_per_subjob - 1) / $nnodes_per_subjob ))
+ncores_per_instance=$((opt_np > cmd_np ? opt_np : cmd_np))
+nnodes_per_instance=$((opt_nnodes > cmd_nnodes ? opt_nnodes : cmd_nnodes))
+ncores_per_instance_per_node=$(((ncores_per_instance + nnodes_per_instance - 1) / nnodes_per_instance))
 
 mem_per_core=$(echo "$nonschedopt" | grep 'mem_per_core' | awk 'BEGIN {FS="="} {print $2}' | awk '{print $1}')
-mem_per_subjob=$(( $mem_per_core * $ncores_per_subjob_per_node ))
+mem_per_instance=$((mem_per_core * ncores_per_instance_per_node))
 
 
 
 # Specify how to distribute subjobs
 
-if [[ $nnodes_per_subjob -eq 1 ]]; then
+if [[ $nnodes_per_instance -eq 1 ]]; then
 
     # single-node calculation
 
-    nsubjobs_per_node=$(echo "$sched_ncores_per_node / $ncores_per_subjob" | bc)
-    nsubjobs_per_job=$(echo "$sched_nnodes_per_job * $nsubjobs_per_node" | bc)
+    ninstances_per_node=$(echo "$sched_ncores_per_node / $ncores_per_instance" | bc)
+    ninstances_per_job=$(echo "$sched_nnodes_per_job * $ninstances_per_node" | bc)
 
-elif [[ $nnodes_per_subjob -gt 1 ]]; then
+elif [[ $nnodes_per_instance -gt 1 ]]; then
 
     # multi-node calculation
 
-    nsubjobs_per_node="1"
-    nsubjobs_per_job=$(echo "$sched_nnodes_per_job / $nnodes_per_subjob" | bc)
+    ninstances_per_node="1"
+    ninstances_per_job=$(echo "$sched_nnodes_per_job / $nnodes_per_instance" | bc)
 fi
-nsubjobs_per_array=$(echo "$sched_njobs_per_array * $nsubjobs_per_job" | bc)
-
-
-
-# Check before proceeding
-
-if [[ $nnodes_per_subjob -gt $sched_nnodes_per_job ]]; then
-    echo "Warning: number of nodes for a subjob should be equal or less than number of nodes requested for a job"
-    echo "number of nodes (/job)    : $sched_nnodes_per_job"
-    echo "number of nodes (/subjob) : $nnodes_per_subjob"
-    exit 127
-fi
-
-if [[ $ncores_per_subjob_per_node -gt $sched_ncores_per_node ]]; then
-    echo "Warning: number of cores per node for a subjob should be equal or less than the number of cores per node"
-    echo "number of cores (/node)        : $sched_ncores_per_node"
-    echo "number of cores (/subjob/node) : $ncores_per_subjob_per_node"
-    exit 127
-fi
-
-if [[ $np_per_node -gt $ncores_per_subjob_per_node ]]; then
-    echo "Warning: mpinp/ompnp per node should be equal or less than the number of cores per node for a subjob"
-    echo "mpinp/ompnp (/subjob/node)     : $np_per_node"
-    echo "number of cores (/subjob/node) : $ncores_per_subjob_per_node"
-    exit 127
-fi
-
-if [[ $mpinp -gt 1 ]] && [[ $ompnp -gt 1 ]]; then
-    echo "Warning: hybrid MPI/OpenMP job is not supported"
-    exit 127
-fi
-
-if [[ $ompnp -gt 1 ]] && [[ $nnodes_per_subjob -gt 1 ]]; then
-    echo "Warning: OpenMP job cannot be parallized over multiple nodes"
-    exit 127
-fi
-    
+ninstances_per_array=$(echo "$sched_njobs_per_array * $ninstances_per_job" | bc)
 
 
 echo
@@ -317,7 +287,6 @@ echo "      command       : $cmdline"
 echo "      program       : $program"
 echo "      seed          : $seed"
 echo "      despawn       : $despawn"
-echo "      bakres        : $bakres"
 [[ $program == "airss" ]] && echo "      max           : $max"
 [[ $program == "forge" ]] && echo "      numpot        : $numpot"
 echo
@@ -334,23 +303,62 @@ echo "      cores         : $sched_ncores_per_array /array"
 echo "      nodes         : $sched_nnodes_per_array /array"
 echo
 echo "      * The size of each subjob"
-echo "      nodes         : $nnodes_per_subjob /subjob"
-echo "      cores         : $ncores_per_subjob /subjob"
-echo "                    : $ncores_per_subjob_per_node /subjob/node"
+echo "      nodes         : $nnodes_per_instance /subjob"
+echo "      cores         : $ncores_per_instance /subjob"
+echo "                    : $ncores_per_instance_per_node /subjob/node"
 echo "      mpinp         : $mpinp /subjob"
 echo "      ompnp         : $ompnp /subjob"
-echo "      np            : $np /subjob"
-echo "                    : $np_per_node /subjob/node"
 echo "      memory        : ${mem_per_core}M/core"
 echo 
 echo "      * The distirbution of subjobs"
-echo "      subjobs       : $nsubjobs_per_node /node"
-echo "                    : $nsubjobs_per_job /job"
-echo "                    : $nsubjobs_per_array /array"
-if [[ $np -lt $ncores_per_subjob ]]; then
-echo "      underpopulate : $np_per_node /node out of $ncores_per_subjob_per_node /node" 
+echo "      subjobs       : $ninstances_per_node /node"
+echo "                    : $ninstances_per_job /job"
+echo "                    : $ninstances_per_array /array"
+if [[ $np -lt $ncores_per_instance ]]; then
+echo "      underpopulate : $np_per_node /node out of $ncores_per_instance_per_node /node" 
+echo
+echo
+echo "    called as ( "${0##*/}" "$args" ) &>> spawn-batch.out &"
 fi
 
+
+# Check before proceeding
+
+if [[ $nnodes_per_instance -gt $sched_nnodes_per_job ]]; then
+    echo "Warning: number of nodes for a subjob should be equal or less than number of nodes requested for a job"
+    echo "number of nodes (/job)    : $sched_nnodes_per_job"
+    echo "number of nodes (/subjob) : $nnodes_per_instance"
+    exit 127
+fi
+
+if (( sched_nnodes_per_job % nnodes_per_instance != 0 )); then
+  echo "$sched_nnodes_per_job does not divide evenly by $nnodes_per_instance."
+fi
+
+if [[ $ncores_per_instance_per_node -gt $sched_ncores_per_node ]]; then
+    echo "Warning: number of cores per node for a subjob should be equal or less than the number of cores per node"
+    echo "number of cores (/node)        : $sched_ncores_per_node"
+    echo "number of cores (/subjob/node) : $ncores_per_instance_per_node"
+    exit 127
+fi
+
+if [[ $np_per_node -gt $ncores_per_instance_per_node ]]; then
+    echo "Warning: mpinp/ompnp per node should be equal or less than the number of cores per node for a subjob"
+    echo "mpinp/ompnp (/subjob/node)     : $np_per_node"
+    echo "number of cores (/subjob/node) : $ncores_per_instance_per_node"
+    exit 127
+fi
+
+if [[ $mpinp -gt 1 ]] && [[ $ompnp -gt 1 ]]; then
+    echo "Warning: hybrid MPI/OpenMP job is not supported"
+    exit 127
+fi
+
+if [[ $ompnp -gt 1 ]] && [[ $nnodes_per_instance -gt 1 ]]; then
+    echo "Warning: OpenMP job cannot be parallized over multiple nodes"
+    exit 127
+fi
+    
 
 ## Generate batch script to run an MPI parallel array job under Sun Grid Engine (SGE) batch queuing system
 
@@ -368,7 +376,7 @@ function genjob {
             echo "${schedopt}"
             #echo "${schedopt}" \
             #| sed "s/--cpus-per-task[[:print:]]*/--cpus-per-task=${ompnp}/" \
-            #| sed "s/--tasks-per-node=[[:print:]]*/--tasks-per-node=${nsubjobs_per_node}/"
+            #| sed "s/--tasks-per-node=[[:print:]]*/--tasks-per-node=${ninstances_per_node}/"
         else
            echo "${schedopt}"
         fi
@@ -419,7 +427,8 @@ function genjob {
     (
         echo '# launch program'
         echo
-
+        echo '(echo; top -b -n 1 -u $USER; echo) >> top.txt'
+        echo
         echo '# loop over the nodes assigned to the job'
 
         if [[ $sched == 'slurm' ]]
@@ -427,11 +436,11 @@ function genjob {
             echo 'nodelist=$(scontrol show hostnames $SLURM_JOB_NODELIST)'
 		    echo 'templist=($nodelist)'
 
-            echo "for (( ni=0; ni<${sched_nnodes_per_job}; ni+=${nnodes_per_subjob} ))"
+            echo "for (( ni=0; ni<${sched_nnodes_per_job}; ni+=${nnodes_per_instance} ))"
             echo 'do'
 		    echo '    nodeid=""'
 		    echo '    tempid=""'
-		    echo '    for nj in `seq 1' ${nnodes_per_subjob}'`'
+		    echo '    for nj in `seq 1' ${nnodes_per_instance}'`'
             echo '    do'
 		    echo '        index=$(( ni + nj - 1 ))'
 		    echo '        tempid+="${templist[index]},"'
@@ -441,14 +450,15 @@ function genjob {
 
         elif [[ $sched == 'sge' ]]
         then
-            echo "for (( ni=0; ni<${sched_nnodes_per_job}; ni+=${nnodes_per_subjob} ))"
+            echo "for (( ni=0; ni<${sched_nnodes_per_job}; ni+=${nnodes_per_instance} ))"
             echo 'do'
             echo '    nodeid=""'
             echo '    nodeid=$(( ni + 1 ))'
         fi
             echo '    # loop over subjobs on each node'
-            echo "    for (( i=1; i<=${nsubjobs_per_node}; i++ ))"
+            echo "    for (( i=1; i<=${ninstances_per_node}; i++ ))"
             echo '    do'
+            echo '        sleep 0.1'
 
         # command lines for application
 
@@ -456,7 +466,7 @@ function genjob {
         if [[ $program == 'airss' || $program == 'crud' ]] && [[ $exe == 'castep' ]]; then
 
             [[ $sched == 'sge' ]] && launcher='mpirun -np '
-            [[ $sched == 'slurm' ]] && launcher='srun --nodelist=${nodeid} --exact --nodes='"${nnodes_per_subjob}"' --cpus-per-task=1 --mem='"${mem_per_subjob}"'M  --ntasks-per-node='"${np_per_node}"'  --ntasks='
+            [[ $sched == 'slurm' ]] && launcher='srun --nodelist=${nodeid} --exact --nodes='"${nnodes_per_instance}"' --cpus-per-task=1 --mem='"${mem_per_instance}"'M  --ntasks-per-node='"${ncores_per_instance_per_node}"'  --ntasks='
 
             echo "        ${cmdline}"' \'
             echo '            -launch "'${launcher}'" \'
@@ -466,7 +476,7 @@ function genjob {
         elif [[ $program == 'airss' || $program == 'crud' ]] && [[ $exe == 'repose' ]]; then
 
             [[ $sched == 'sge' ]] && launcher=''
-            [[ $sched == 'slurm' ]] && launcher='srun --nodelist=${nodeid} --exact --nodes=1 --ntasks=1 --ntasks-per-node=1 --cpus-per-task='"${np_per_node}"' --mem='"${mem_per_subjob}"'M'
+            [[ $sched == 'slurm' ]] && launcher='srun --nodelist=${nodeid} --exact --nodes=1 --ntasks=1 --ntasks-per-node=1 --cpus-per-task='"${ncores_per_instance}"' --mem='"${mem_per_instance}"'M'
 
             echo "        ${launcher}"' \'
             echo "        ${cmdline} &"
@@ -475,9 +485,7 @@ function genjob {
         elif [[ $program == 'forge' ]]; then
 
             [[ $sched == 'sge' ]] && launcher=''
-            [[ $sched == 'slurm' ]] && [[ $nsubjobs_per_node -eq 1 ]] && launcher='srun --nodelist=${nodeid} --exact --hint=nomultithread --distribution=block:block --nodes=1 --ntasks=1 --ntasks-per-node=1 --cpus-per-task='"${sched_ncores_per_node}"
-            [[ $sched == 'slurma' ]] && launcher='srun --nodelist=${nodeid} --exact --hint=nomultithread --distribution=block:block --nodes=1 --ntasks=1 --ntasks-per-node=1 --cpus-per-task='"${np_per_node}"
-            [[ $sched == 'slurma' ]] && launcher='srun --nodelist=${nodeid} --exact --hint=nomultithread --distribution=block:block --nodes=1 --ntasks=1 --ntasks-per-node=1 --cpus-per-task='"${np_per_node}"' --mem='"${mem_per_subjob}"'M'
+            [[ $sched == 'slurm' ]] && launcher='srun --nodelist=${nodeid} --exact --hint=nomultithread --distribution=block:block --nodes=1 --ntasks=1 --ntasks-per-node=1 --cpus-per-task='"${ncores_per_instance}"
 
             echo "        ${launcher}"' \'
             echo "        ${cmdline}"'.${jids}.${nodeid}.${i}  < /dev/null \'
@@ -488,7 +496,7 @@ function genjob {
         elif [[ $program == 'flock' ]]; then
 
             [[ $sched == 'sge' ]] && launcher=''
-            [[ $sched == 'slurm' ]] && launcher=''
+            [[ $sched == 'slurm' ]] && launcher='srun --nodelist=${nodeid} --exact --hint=nomultithread --distribution=block:block --nodes=1 --ntasks=1 --ntasks-per-node=1 --cpus-per-task='"${ncores_per_instance}"
 
             echo "        ${launcher}"' \'
             echo "        ${cmdline} &"
@@ -504,15 +512,15 @@ function genjob {
         fi
 
         echo ''
-        echo '        pid=$!'
-        echo '        pgid=`ps -o pgid= ${pid}`'
-        echo '        echo "--------------------${jids}.${nodeid}.${i}"      >> ${prefix}.${jids}'
-        echo '        echo "nodeid:             ${nodeid}"                   >> ${prefix}.${jids}'
-        echo '        echo "pid:                ${pid}"                      >> ${prefix}.${jids}'
-        echo '        echo "pgid:               ${pgid}"                     >> ${prefix}.${jids}'
-        echo '        echo "start_time:         $(date +%Y-%m-%d\ %H:%M:%S)" >> ${prefix}.${jids}'
+        echo '        echo "instance: ${jids} ${nodeid} ${i} $(date +%Y-%m-%d\ %H:%M:%S)"  >> ${prefix}.${jobid}'
         echo '    done'
         echo 'done'
+        echo
+        echo '(echo; top -b -n 1 -u $USER; echo) >> top.txt'
+        echo 'sleep 10'
+        echo '(echo; top -b -n 1 -u $USER; echo) >> top.txt'
+        echo 'sleep 60'
+        echo '(echo; top -b -n 1 -u $USER; echo) >> top.txt'
         echo
         echo 'wait'
         echo 'sleep 5'
@@ -548,13 +556,14 @@ function gendespawn {
         echo "program='${program}'"
         echo "jobid=\$(cat .spawnpids.* | grep jobid: | head -n 1 | awk '{print \$2}')"
         echo
-        [[ $sched == 'sge'   ]] && echo '[[ ! -f done.${jobid} ]] && qdel ${jobid} && echo "    stopping job ${jobid} ..."'
-        [[ $sched == 'slurm' ]] && echo '[[ ! -f done.${jobid} ]] && scancel ${jobid} && echo "    stopping job ${jobid} ..."'
+        [[ $sched == 'sge'   ]] && echo '[[ ! -f done.job.${jobid} ]] && qdel ${jobid} && echo "    stopping job ${jobid} ..."'
+        [[ $sched == 'slurm' ]] && echo '[[ ! -f done.job.${jobid} ]] && scancel ${jobid} && echo "    stopping job ${jobid} ..."'
         echo
-        echo 'touch stopspawn'
-        echo 'touch stopmonitor'
+        echo 'touch stopspawn stopmonitor'
         echo
         echo 'sleep 10'
+        echo
+        echo '[[ -f status.${program} ]] && (echo; cat status.${program}; echo)'
         echo
         echo 'for spawnfile in .spawnpids.*'
         echo 'do'
@@ -562,7 +571,7 @@ function gendespawn {
         echo 'done'
         echo
         echo 'mkdir -p jobinfo'
-        echo "mv -f ${jobscript}                   jobinfo 2>/dev/null"
+        echo "mv -f jobscript_*                    jobinfo 2>/dev/null"
         echo 'mv -f .spawnpids* .fail.spawnpids*   jobinfo 2>/dev/null'
         echo 'mv -f $program.{e,o,pe,po}${jobid}*  jobinfo 2>/dev/null'
         echo 'mv -f slurm-*.out                    jobinfo 2>/dev/null'
@@ -572,72 +581,10 @@ function gendespawn {
         echo 'rm -f stopspawn stopmonitor'
         echo 'rm -f ./.bashrc'
         echo
+        echo 'wait'
+        echo 'echo -e "\n    despawn-batch complete: $(date)\n"'
+        echo 'exit 0'
     ) > despawn-batch
-
-
-
-    # backup data - job-related files
-
-    if [[ $bakres != 'none' ]]
-    then
-        (
-            echo '# backup data - job-related files'
-            echo
-            echo 't_end_ymd=$(date +%y%m%d)'
-            echo 't_end_hms=$(date +%H%M%S)'
-            echo
-            echo 'backupdir=${t_end_ymd}-${t_end_hms}-${jobid}-${program}'
-            echo 'mkdir ${backupdir}'
-            echo
-            echo 'mv jobinfo ${backupdir}'
-            echo
-            echo
-        ) >> despawn-batch
-    fi
-
-    # backup data - input & output files
-
-    if [[ $program == "airss" && $bakres != "none" ]]
-    then
-        (
-            echo '# backup data -input & output files'
-            echo
-            echo 'rm -f $seed-*.{cell,param,res.temp,cell.temp} &'
-            echo 'find . -maxdepth 1 -type f -name "$seed-*.res" -empty -delete &'
-            echo 'find . -maxdepth 1 -type f -name "$seed-*.res" | xargs grep -s -L TITL | xargs rm -f &'
-            echo 'find . -maxdepth 1 -type f -name "$seed-*.res" | xargs grep -s -L END  | xargs rm -f &'
-            echo 'wait'
-            echo
-            echo 'find . -maxdepth 1 -type f -name "$seed-*.res" | shuf | head -n -'$max' | xargs -r rm'
-            echo
-            echo 'cp $seed.{cell,param}       ${backupdir} 2>/dev/null'
-            echo 'cp -r $seed{,.eddp}         ${backupdir} 2>/dev/null'
-            echo 'mv trash                    ${backupdir} 2>/dev/null'
-            [[ $bakres == 'mv' ]] && echo 'find . -maxdepth 1 -type f -name "$seed-*.*" -exec mv -t ${backupdir} {} \+'
-            [[ $bakres == 'cp' ]] && echo 'find . -maxdepth 1 -type f -name "$seed-*.*" -exec cp -t ${backupdir} {} \+'
-            echo
-        ) >> despawn-batch
-
-    elif [[ $program == "crud" && $bakres != "none" ]]
-    then
-        (
-            echo 'cp *.{cell,param}       ${backupdir} 2>/dev/null'
-            [[ $bakres == 'mv' ]] && echo 'mv    bad_castep good_castep hopper ${backupdir} 2>/dev/null'
-            [[ $bakres == 'cp' ]] && echo 'cp -R bad_castep good_castep hopper ${backupdir} 2>/dev/null'
-            echo
-        ) >> despawn-batch
-
-    elif [[ $program == "forge" && $bakres != "none" ]]
-    then
-        (
-            echo 'cp -R ${seed} data.res ${backupdir} 2>/dev/null'
-            echo
-        ) >> despawn-batch
-    fi
-
-    echo 'wait' >> despawn-batch
-    echo 'echo -e "\n    despawn-batch complete: $(date)\n"' >> despawn-batch
-    echo 'exit 0' >> despawn-batch
 
     chmod 777 despawn-batch
 }
@@ -680,20 +627,22 @@ function monjob {
 
     monitor_job ${sched} ${jobid} &
 
-    [[ $program == "airss" ]] && monitor_airss $jobid $seed $max &
-    [[ $program == "crud" ]] && monitor_crud $jobid &
-    [[ $program == "forge" ]] && monitor_forge $jobid $seed $numpot &
+    [[ $program == "airss" ]] && monitor_airss $seed $max &
+    [[ $program == "crud" ]] && monitor_crud &
+    [[ $program == "forge" ]] && monitor_forge $seed $numpot &
 
     until [[ $jobrunning == 'false' ]] || [[ $success == 'true' ]]
     do
         sleep 1
 
-        [[ -f ./done.${jobid} ]] && jobrunning='false'
+        [[ -f ./done.job.${jobid} ]] && jobrunning='false'
         [[ -f ./done.${program} ]] && success='true'
 
         [[ -f './stopspawn' ]] && echo -e '\n    stopping spawn-batch ...' && exit 0
         [[ -f './STOP' ]] && echo -e '\n    stopping spawn-batch ...' && ./despawn-batch && exit 0
     done
+
+    [[ -f status.${program} ]] && (echo; cat status.${program}; echo)
 
     # stop monitoring
 
@@ -711,56 +660,16 @@ function monjob {
 }
 
 
-
 ## clean the intermediate result files before resubmitting the job
 
 function resetjob {
 
+    echo "    setting up resubmission ..."
 
-    rename '.spawnpids' '.fail.spawnpids' .spawnpids.*
+    rm -f done.job.${jobid} status.job.${jobid} .spawnpids.${jobid}
 
-    # clean up intermediate result files where calculations are not fully completed
-
-    if [[ $program == 'airss' ]]
-    then
-        for f in $(ls $seed-*.cell)
-        do
-            seedairss=${f%%.cell}
-            [[ ! -f $seedairss.res ]] && ls $seedairss.* | xargs rm -f
-        done
-
-    elif [[ $program == 'crud' ]]
-    then
-        # for failure due to bad castep
-        if [[ -d bad_castep ]]
-        then
-            rm -f bad_castep/*.{cell,param,castep}
-            find . ./bad_castep -maxdepth 1 -type f -name "*.res" | sed '/data.res/d' | xargs mv -t ./hopper
-        fi
-        # for the incomplete calculation stopped during running
-        if ls *.castep &>/dev/null
-        then
-            for castepfile in `ls *.castep`
-            do
-                seedcrud=${castepfile%%.castep}
-                echo $seedcrud
-                castep2res $seedcrud > hopper/$seedcrud.res
-                rm -f $seedcrud.{cell,param,castep,res}
-            done
-        fi
-        # for the incomplete calculation stopped at the beginning of the calculation
-        for f in $(ls $seed-*.cell)
-        do
-            seedcrud=${f%%.cell}
-            if [[ -f $seedcrud.res ]]; then
-                mv $seedcrud.res ./hopper
-            else
-                cabal cell res < $seedcrud.cell > ./hopper/$seedcrud.res
-            fi
-            rm -f $seedcrud.{cell,param,castep,res}
-        done
-
-    fi
+    [[ $program == 'airss' ]] && reset_airss $seed
+    [[ $program == 'crud' ]] && reset_crud
 }
 
 
@@ -782,7 +691,7 @@ until [[ $success == 'true' ]]
 do
     subjob
     monjob
-    [[ $success == 'false' ]] && resetjob && echo -e '    resubmitting the job ...\n'
+    [[ $success == 'false' ]] && resetjob
 done
 
 # clean job
@@ -792,4 +701,5 @@ done
 wait
 
 echo -e "\n    spawn-batch complete: $(date)\n"
+
 exit 0

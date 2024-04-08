@@ -29,43 +29,62 @@
 
 set -e
 
-if [ $# -ne 3 ]; then
-    echo 1>&2 "Usage: $(basename $0) <jobid> <seed> <max>"
+if [ $# -ne 2 ]; then
+    echo 1>&2 "Usage: $(basename $0) <seed> <max>"
     exit 127
 fi
 
 # Get arguments
 
-jobid=$1
-seed=$2
-max=$3
+seed=$1
+max=$2
 
 
 # Check the number of random structure generated (./*.res files)
 
 echo "    starting airss monitoring ..."
 
-touch ./status.airss.${jobid}
+touch ./status.airss
 
 counter=0
-
+SECONDS=0
+seconds_count=0
+seconds_cryan=0
 until [[ $counter -ge $max ]]
 do
-    counter=$(find . -maxdepth 1 -type f -name "$seed-*.res" 2> /dev/null | sed "/data.res/d" | xargs grep --no-filename TITL 2> /dev/null | wc -l)
-
-    sed -i "/check_time/d"                                      ./status.airss.${jobid}
-    sed -i "/no. structures/d"                                  ./status.airss.${jobid}
-    echo "check_time:         $(date +%Y-%m-%d\ %H:%M:%S)"   >> ./status.airss.${jobid}
-    echo "no. structures:     ${counter}"                    >> ./status.airss.${jobid}
-
+    seconds_count=$((seconds_count + SECONDS))
+    seconds_cryan=$((seconds_cryan + SECONDS))
     SECONDS=0
-    until [[ $SECONDS -ge 5 ]]
-    do
-        [[ -f ./stopmonitor ]] && echo '    stopping airss monitoring ...' && exit 0
-        [[ -f ./STOP        ]] && echo '    stopping airss monitoring ...' && exit 0
-        sleep 1
-    done
+
+    if [[ $seconds_count -ge 5 ]]; then
+        counter=$(find . -maxdepth 1 -type f -name "$seed-*.res" 2> /dev/null | sed "/data.res/d" | xargs grep --no-filename TITL 2> /dev/null | wc -l)
+        sed -i "/check_time/d"                                      ./status.airss
+        sed -i "/no. structures/d"                                  ./status.airss
+        echo "check_time:         $(date +%Y-%m-%d\ %H:%M:%S)"   >> ./status.airss
+        echo "no. structures:     ${counter}"                    >> ./status.airss
+        seconds_count=0
+    fi
+
+    if [[ $seconds_cryan -ge 60 ]]; then
+        if ls $seed-*.res &>/dev/null; then
+            ( cat $seed-*.res | cryan -l -r > ./status.airss.cryan ) </dev/null &>/dev/null &
+        fi
+        seconds_cryan=0
+    fi
+
+    if [[ -f ./stopmonitor ]] || [[ -f ./STOP ]]; then
+        echo '    stopping airss monitoring ...'
+        exit 0
+    fi
+
+    rm -f airss.pe* airss.po*                                                                                             
+    find . -name "airss.e*" -size 0 -delete                                                                              
+    find . -name "airss.o*" -size 0 -delete  
+
+    sleep 1
+
 done
+
 
 sleep 1
 

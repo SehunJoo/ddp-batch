@@ -1,0 +1,35 @@
+#!/bin/bash
+
+if [ $# -ne 0 ]; then
+    echo 1>&2 "Usage: $(basename $0)"
+    exit 127
+fi
+
+# Get arguments
+
+for f in *-*.cell; do
+
+    [[ ! -f $f ]] && continue
+
+    seed=${f%%.cell}
+
+    if [[ -f $seed.castep ]]; then
+        if grep -q "Cell Contents" $seed.castep; then
+            castep2res $seed > hopper/$seed.res
+        elif [[ -f $seed.res ]]; then
+            mv $seed.res hopper
+        else
+            echo "    Error reset_crud: $seed"
+        fi
+    elif [[ -f $seed.res ]]; then
+        mv $seed.res hopper
+    else
+        echo "    Error reset_crud: $seed"
+    fi
+
+    rm -f $seed.{cell,param,castep}
+    rm -f $seed.{res,par}
+    rm -f $seed.{check,check_bak,castep_bin} $seed-out.cif
+done
+
+exit 0

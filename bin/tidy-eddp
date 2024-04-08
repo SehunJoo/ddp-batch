@@ -1,0 +1,15 @@
+#!/bin/bash
+
+eddp=$(ls *.eddp)
+seed=${eddp%.eddp}
+
+echo "EDDP ensemble: $(cat $eddp | wc -l) DDPs"
+
+mkdir ${seed}-ensemble
+cat $eddp | awk '{print $1}' | xargs -i cp {} ${seed}-ensemble
+
+mv ${seed} ${seed}-ddp
+mv ${seed}-ensemble ${seed}
+
+rm -rf ${seed}-ddp
+

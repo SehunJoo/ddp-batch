@@ -1,8 +1,9 @@
 #!/bin/bash
 
-ls -I "clean" -I "runtest-*" \
-   -I "Li.cell" -I "Li.param" \
-   -I "*.schedopt.example" \
-    | xargs rm -rf
+rm -rf Li.cell.* Li-*-*.* Li-*-*-*.*
+rm -rf jobinfo despawn-batch
+rm -rf stop* status.* STOP
+rm -rf nohup.out spawn-batch.out top.txt
 
-rm -f .spawnpids* .fail.spawnpids*
+
+rm -f .spawnpids*

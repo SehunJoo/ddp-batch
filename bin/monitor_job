@@ -42,38 +42,39 @@ counter=1
 
 echo "    starting job ${jobid} monitoring ..."
 
-touch ./status.${jobid}
+touch ./status.job.${jobid}
 
 sleep 10
 
+[[ $sched == 'sge' ]] && cmdline="qstat -g d -u $USER | grep $jobid"
+[[ $sched == 'slurm' ]] && cmdline="squeue --noheader --job=$jobid --array --user=$USER"
+
+SECONDS=0
 until [[ $counter -eq 0 ]]
 do
     # count the number of jobs
 
-    [[ $sched == 'sge' ]] && cmdline="qstat -g d -u $USER | grep $jobid"
-    [[ $sched == 'slurm' ]] && cmdline="squeue --noheader --job=$jobid --array --user=$USER"
+    if [[ $SECONDS -ge 120 ]]; then
+        $cmdline > ./status.job.${jobid}
+        exit_status=$?
 
-    $cmdline > ./status.${jobid}
-    exit_status=$?
-
-    if [[ $exit_status -eq 0 ]]; then
-        counter=$(cat ./status.${jobid} | wc -l)
-        #echo -e -n "\r    ${counter} jobs pending/running"
-    else
-        echo 'scheduler command failed, it will be tried in 5 minutes ...'
+        if [[ $exit_status -eq 0 ]]; then
+            counter=$(cat ./status.job.${jobid} | wc -l)
+            [[ $counter -eq 0 ]] && break
+            #echo -e -n "\r    ${counter} jobs pending/running"
+        else
+            echo 'scheduler command failed, it will be tried in 5 minutes ...'
+        fi
+        SECONDS=0
     fi
 
-    SECONDS=0
-    until [[ $SECONDS -ge 600 ]]
-    do
-        [[ -f ./stopmonitor ]] && echo "    stopping job ${jobid} monitoring ..." && exit 0
-        [[ -f ./STOP        ]] && echo "    stopping job ${jobid} monitoring ..." && exit 0
-        sleep 1
-    done
+    [[ -f ./stopmonitor ]] && echo "    stopping job ${jobid} monitoring ..." && exit 0
+    [[ -f ./STOP        ]] && echo "    stopping job ${jobid} monitoring ..." && exit 0
+    sleep 1
 done
 
-touch done.${jobid}
+touch done.job.${jobid}
 
-echo '    job ${jobid} complete'
+echo "    job ${jobid} complete"
 
 exit 0

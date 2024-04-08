@@ -1,0 +1,46 @@
+#!/bin/bash
+
+check_executable() {
+
+  local executable=$1
+
+  # Check if the executable is in the PATH
+  which $executable > /dev/null 2>&1
+  if [ $? -eq 0 ]; then
+    executable_path=$(which $executable)
+    printf "%-15s : %s\n" "$executable" "$executable_path"
+  else
+    echo "--------------------------------------------------"
+    printf "%-15s : %s is not available in PATH\n" "$executable" "$executable"
+    echo "--------------------------------------------------"
+  fi
+}
+
+echo
+echo "Checking executables required to run chain-batch ..."
+echo
+
+# fullrand
+check_executable 'airss.pl'
+check_executable 'cabal'
+check_executable 'cryan'
+check_executable 'castep'
+check_executable 'castep.mpi'
+
+# relaxandjiggle
+check_executable 'crud.pl'
+check_executable 'repose'
+check_executable 'ramble'
+
+# genpot
+check_executable 'franks'
+check_executable 'frank'
+check_executable 'parallel'
+check_executable 'forge'
+check_executable 'flock'
+
+# ddp-batch
+check_executable 'spawn-batch'
+check_executable 'farm-batch'
+
+
