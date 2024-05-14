@@ -57,7 +57,15 @@ do
     # Check process (every 5 seconds)
 
     if [[ $seconds_count -ge 5 ]]; then
-        counter=$(find . ./hopper -maxdepth 1 -type f -name "*.res" | sed "/data.res/d" | wc -l)
+        # hopper
+
+        counter=$(find ./hopper -maxdepth 1 -type f -name "*.res" | sed "/data.res/d" | wc -l)
+
+        # workdir - consider press run of AIRSS
+
+        for f in *-*.cell; do
+            [[ -f "${f%%.cell}.res" ]] && ((counter++))
+        done
 
         # good_castep
 
