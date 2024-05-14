@@ -124,7 +124,7 @@ do
 
 
     if [[ -f ./stopmonitor ]] || [[ -f ./STOP ]]; then
-        echo '    stopping airss monitoring ...'
+        echo '    stopping crud monitoring ...'
         exit 0
     fi
 
