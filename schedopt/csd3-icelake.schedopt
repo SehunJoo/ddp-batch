@@ -1,0 +1,137 @@
+## ======================================================================================
+## Cambridge Service for Data-drive Discovery (CSD3) - Icelake
+##
+## With thanks to Sunil Taper for the specifications, testing, and feedback
+##
+##   Max Nodes Per Job   : 1      (#SBATCH --nodes=16)
+##   Max Walltime        : 36 hrs  (#SBATCH --time=36:00:00 # maximum wallclock time)
+##   Max Jobs Running    : 76      (#SBATCH --array=1-38 # higher number should or can be the maximum size of an array job)
+##   Notes               : Maximum of 76 nodes in use by any one user at any time for SL2 queue
+##                         --nodes=2 --array=1-38
+##                         --nodes=1 --array=1-76 # higher number should or can be the maximum size of an array job
+##  --hint=nomultithread : do not use hyperthreads/SMP; only use physical cores
+##  --distribution=block:block :  allocate processes to cores in a sequential fasion
+##      the first block means use a block distribution of processes across nodes 
+##      (i.e. fill nodes before moving onto the next one)
+##      the second block means use a block distribution of processes across "sockets" within a node
+##      (i.e. fill a "socket" before moving on to the next one)
+## ======================================================================================
+## Additional parameters
+##
+##   ncores_per_node   : number of cores on a node (56 for Icelake on CSD3)
+##   nnodes_per_subjob : number of nodes you want to allocate to a single subjob (a subjob is one instance of CASTEP / franks / forge / flock)
+##   ncores_per_subjob : number of cores you want to allocate to a single subjob
+## ======================================================================================
+## Example
+### --------------------------------------------------------------------------------------
+##   small job - multiple subjobs per single node
+##     nnodes_per_subjob=1 # leave unchanged      
+##     ncores_per_subjob=4
+## --------------------------------------------------------------------------------------
+##   medium job - single subjob per single node
+##     nnodes_per_subjob=1 # leave unchanged      
+##     ncores_per_subjob=56 # in this case, set it to the number of real cores on a node
+## --------------------------------------------------------------------------------------
+##   large job - single subjob per multiple nodes
+##     nnodes_per_subjob=2
+##     ncores_per_subjob=112
+## ======================================================================================
+
+
+%block default
+#SBATCH --job-name=default
+#SBATCH --time=36:00:00 
+#SBATCH --nodes=1 
+#SBATCH --tasks-per-node=56 
+#SBATCH --cpus-per-task=1 
+#SBATCH --array=1-76 
+#SBATCH --account= 
+#SBATCH --partition=cclake 
+
+ncores_per_node=56 
+nnodes_per_subjob=1 
+ncores_per_subjob=56 
+%endblock default
+
+
+%block airss
+#SBATCH --job-name=airss
+#SBATCH --time=36:00:00 
+#SBATCH --nodes=1 
+#SBATCH --tasks-per-node=56 
+#SBATCH --cpus-per-task=1 
+#SBATCH --array=1-76 
+#SBATCH --account= 
+#SBATCH --partition=cclake 
+
+ncores_per_node=56 
+nnodes_per_subjob=1 
+ncores_per_subjob=56 
+%endblock airss
+
+
+%block crud
+#SBATCH --job-name=crud
+#SBATCH --time=36:00:00 
+#SBATCH --nodes=1 
+#SBATCH --tasks-per-node=56 
+#SBATCH --cpus-per-task=1 
+#SBATCH --array=1-76 
+#SBATCH --account= 
+#SBATCH --partition=cclake 
+
+ncores_per_node=56 
+nnodes_per_subjob=1 
+ncores_per_subjob=56 
+%endblock crud
+
+
+## Note: GNU-parallel job / single node / short
+%block franks
+#SBATCH --job-name=franks
+#SBATCH --time=00:20:00 
+#SBATCH --nodes=1 
+#SBATCH --tasks-per-node=56 
+#SBATCH --cpus-per-task=1 
+#SBATCH --array=1-1 
+#SBATCH --account= 
+#SBATCH --partition=cclake 
+
+ncores_per_node=56 
+nnodes_per_subjob=1 
+ncores_per_subjob=56 
+%endblock franks
+
+
+## Note: OpenMP job
+%block forge
+#SBATCH --job-name=forge
+#SBATCH --time=36:00:00 
+#SBATCH --nodes=1 
+#SBATCH --tasks-per-node=1
+#SBATCH --cpus-per-task=56 
+#SBATCH --array=1-76 
+#SBATCH --account= 
+#SBATCH --partition=cclake 
+
+ncores_per_node=56 
+nnodes_per_subjob=1 
+ncores_per_subjob=56 
+%endblock forge
+
+
+## Note: OpenMP job / single node / short
+%block flock
+#SBATCH --job-name=flock
+#SBATCH --time=00:20:00 
+#SBATCH --nodes=1 
+#SBATCH --tasks-per-node=1
+#SBATCH --cpus-per-task=56 
+#SBATCH --array=1-1 
+#SBATCH --account= 
+#SBATCH --partition=cclake 
+
+ncores_per_node=56 
+nnodes_per_subjob=1 
+ncores_per_subjob=56 
+%endblock flock
